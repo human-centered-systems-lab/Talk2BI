@@ -2,7 +2,9 @@ import streamlit as st
 import asyncio
 from dotenv import load_dotenv
 import uuid
+
 from agent.agent import graph_runnable
+from utils.astream import stream_graph_events
 
 APP_TITLE = "Talk2BI"
 APP_ICON = "💡"
@@ -57,56 +59,15 @@ async def main():
             {"role": "user", "content": user_input}
         )
 
+        # Render assistant response using shared streaming utility
         with st.chat_message("assistant"):
-            placeholder = st.container()
-            thoughts_placeholder = placeholder.container()
-            token_placeholder = placeholder.empty()
-            final_text = ""
+            container = st.container()
 
-        try:
-            async for event in graph_runnable.astream_events(
-                {"messages": st.session_state.messages}, version="v2"
-            ):
-                event_type = event["event"]
-
-                if event_type == "on_chat_model_stream":
-                    # Stream model output tokens
-                    addition = event["data"]["chunk"].content
-                    final_text += addition
-                    if addition:
-                        token_placeholder.write(final_text)
-
-                elif event_type == "on_tool_start":
-                    # Tool invocation started
-                    with thoughts_placeholder:
-                        status_placeholder = st.empty()
-                        with status_placeholder.status(
-                            "Calling Tool...", expanded=True
-                        ) as s:
-                            st.write("Called ", event["name"])
-                            st.write("Tool input:")
-                            st.code(event["data"].get("input"))
-                            st.write("Tool output:")
-                            output_placeholder = st.empty()
-                            s.update(
-                                label="Completed Calling Tool!",
-                                expanded=False,
-                            )
-
-                elif event_type == "on_tool_end":
-                    # Tool invocation finished
-                    with thoughts_placeholder:
-                        if "output_placeholder" in locals():
-                            output_placeholder.code(
-                                event["data"].get("output").content
-                            )
-
-        except Exception as e:
-            final_text += (
-                f"Thank you for your message. "
-                f"However, an error occurred while processing the response: {e}"
+            final_text = await stream_graph_events(
+                graph_runnable=graph_runnable,
+                messages=st.session_state.messages,
+                container=container,
             )
-            token_placeholder.write(final_text)
 
         # Persist assistant response
         st.session_state.messages.append(
