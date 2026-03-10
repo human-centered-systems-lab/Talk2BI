@@ -56,32 +56,6 @@ src/
     └── astream.py      # Model stream utility  
 ```
 
-<<<<<<< Updated upstream
-If you want to change the agent behavior, go to `src/agent/agent.py`.  
-If you want to change the application (UI and overall flow), go to `src/streamlit_app.py`.
-
-## Contributing
-
-Contributions are very welcome.
-
-- For code changes, fork the repository and open a pull request with a clear description of the motivation and the changes.
-- When possible, keep changes small and focused, and align with the existing project structure (`src/agent` for agent behavior, `src/streamlit_app.py` for UI).
-
-We especially welcome contributions that:
-
-- Add or improve various agent tools (data sources, BI operations, semantic search, etc.).
-- Enhance the UI and user experience (chat interactions, visualizations, filters, history, etc.).
-- Improve BI-related capabilities more broadly (analysis flows, explanations, guidance).
-- Enhance the prompt, agent logic, or evaluation.
-- Polish the developer experience (docs, examples, or tests).
-
-## License
-
-This project is licensed under the MIT License. See the [LICENSE](LICENSE)
-file for full license text.
-
-![Human-Centered Systems Lab (h-Lab)](https://h-lab.win.kit.edu/img/LOGO_lang_klein_RZ.svg)
-=======
 - To change the **agent behavior** (how queries are interpreted, how tools are used, etc.), edit `src/agent/agent.py` and the helper files in `src/agent/utils/`.
 - To change the **application UI and overall flow**, edit `src/streamlit_app.py`.
 - To adjust **streaming behaviour**, see `src/utils/astream.py`.
@@ -104,5 +78,8 @@ Talk2BI is made possible thanks to the incredible work of the open-source commun
 
 ## License
 
-This project is licensed under the [MIT License](./LICENSE) – see the LICENSE file for details.
->>>>>>> Stashed changes
+This project is licensed under the MIT License. See the [LICENSE](LICENSE)
+file for full license text.
+
+
+![Human-Centered Systems Lab (h-Lab)](https://h-lab.win.kit.edu/img/LOGO_lang_klein_RZ.svg)
