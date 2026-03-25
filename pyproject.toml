@@ -9,10 +9,12 @@ dependencies = [
     "databricks-sqlalchemy>=1.0.0",
     "ddgs>=9.10.0",
     "dotenv>=0.9.9",
+    "fastapi>=0.115.6",
     "langchain>=1.2.10",
     "langchain-community>=0.4.1",
     "langchain-openai>=1.1.10",
     "langgraph>=1.0.10",
     "streamlit>=1.54.0",
+    "uvicorn>=0.34.0",
     "watchdog>=6.0.0",
 ]
