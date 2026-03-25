@@ -4,11 +4,12 @@
 [![Streamlit](https://img.shields.io/badge/Streamlit-App-FF4B4B?logo=streamlit&logoColor=white)](https://streamlit.io)
 ![LangGraph](https://img.shields.io/badge/LangGraph-Agent%20Orchestration-blue?logo=langchain&logoColor=white)
 ![Databricks](https://img.shields.io/badge/Databricks-Data%20Platform-orange?logo=databricks&logoColor=white)
+[![FastAPI](https://img.shields.io/badge/FastAPI-Framework-009688?style=flat-square&logo=fastapi&logoColor=white)](https://fastapi.tiangolo.com)
 [![OpenAI](https://img.shields.io/badge/OpenAI-API-black?style=flat-square&logo=openai&logoColor=white)](https://openai.com/)
 [![Python](https://img.shields.io/badge/Python-3.14-blue.svg?style=flat-square)](https://www.python.org/)
 [![uv](https://img.shields.io/badge/uv-package%20manager-FFD43B?style=flat-square&logo=python&logoColor=black)](https://github.com/astral-sh/uv)
 
-Open source is a commitment to transparency, accountability, and collective improvement. Talk2BI follows this principle by making business intelligence accessible through natural language; without sacrificing rigor or reproducibility. Our goal is to remove barriers so that understanding, verifying, and extending AI-based systems is possible for everyone. Anyone should be able to use software, inspect its logic, understand how it works, and build upon it. Built with LangGraph and Streamlit, Talk2BI is an open-access initiative by the [Human-Centered Systems Lab (h-Lab)](https://h-lab.win.kit.edu) at Karlsruhe Institute of Technology (KIT), Germany.
+Open source is a commitment to transparency, accountability, and collective improvement. Talk2BI follows this principle by making business intelligence accessible through natural language; without sacrificing rigor or reproducibility. Our goal is to remove barriers so that understanding, verifying, and extending AI-based systems is possible for everyone. Anyone should be able to use software, inspect its logic, understand how it works, and build upon it. Talk2BI supports persistent chat history and enables secure access to enterprise data, including Databricks-backed data sources. Built with LangGraph, FastAPI and Streamlit, as an open-access initiative by the [Human-Centered Systems Lab (h-Lab)](https://h-lab.win.kit.edu) at Karlsruhe Institute of Technology (KIT), Germany.
 
 ![App](./demo/app_screenshot.gif)
 
@@ -36,24 +37,60 @@ Open source is a commitment to transparency, accountability, and collective impr
    ...
    ```
 
-5. Run the application
+5. Run the FastAPI backend with streaming
+
+   The backend exposes the LangGraph agent behind a FastAPI app with a
+   streaming endpoint using `astream_events`.
+
+   ```bash
+   cd src
+   uv run uvicorn api.route:app --host 0.0.0.0 --port 8000 --reload
+   ```
+
+   - Health check: `GET /health`
+   - Streaming endpoint: `POST /chat/stream`
+
+   Example request body:
+
+   ```json
+   {
+     "messages": [
+       {"role": "user", "content": "Hello!"}
+     ]
+   }
+   ```
+
+   The response is an SSE (Server-Sent Events) stream forwarding the
+   raw LangGraph `astream_events` for maximum flexibility on the client
+   side.
+
+   By default, the Streamlit frontend talks to the backend at
+   `http://localhost:8000`.
+
+6. Run the Streamlit application
    ```bash
    cd src
    uv run streamlit run streamlit_app.py
    ```
 
+7. Inspect the (local db using)
+sqlite3 data/chat_logs.db "SELECT id, session_id, role, substr(content,1,80) AS snippet, created_at FROM chat_messages ORDER BY id DESC LIMIT 20;"
+
+
 ## Main code structure
 
 ```bash
 src/
-├── streamlit_app.py    # Streamlit UI app
+├── streamlit_app.py    # Streamlit UI
 ├── agent/
 │   ├── agent.py        # Main agent
 │   └── utils/
-│       ├── prompt.py   # prompt templates
+│       ├── prompt.py   # agent prompt
 │       └── tools.py    # Agent tools
-└── utils/              
-    └── astream.py      # Model stream utility  
+├── utils/              
+│   └── astream.py      # Stream util
+└── api/              
+    └── route.py      # API route  
 ```
 
 - To change the **agent behavior** (how queries are interpreted, how tools are used, etc.), edit `src/agent/agent.py` and the helper files in `src/agent/utils/`.
