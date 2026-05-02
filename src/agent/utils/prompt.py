@@ -30,7 +30,7 @@ can query. Do NOT skip this step.
 Then you should query the schema of the most relevant tables.
 """.format(
     dialect="Databricks SQL",
-    top_k=5,
+    top_k=20,
 )
 
 
