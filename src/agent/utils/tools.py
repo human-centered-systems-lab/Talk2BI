@@ -34,22 +34,6 @@ db = SQLDatabase.from_databricks(
 )
 
 
-# DuckDuckGo search tool
-#search_DDG = StructuredTool.from_function(
-#    name="Search",
-#    func=DuckDuckGoSearchAPIWrapper().run,
-#    description="""
-#    Useful for answering questions about current events.
-#    Prefer targeted search queries.
-#    """,
-#)
-
-@tool
-def get_weather(location: str):
-    """Return current weather for a given location (mock implementation)."""
-    return "It's 90 degrees and sunny."
-
-
 def get_sql_tools(llm):
     """Create and return SQL database tools for Databricks."""
     toolkit = SQLDatabaseToolkit(db=db, llm=llm)
@@ -59,9 +43,9 @@ llm = ChatOpenAI(
         model=os.getenv("MODEL"),
         api_key=os.getenv("OPENAI_API_KEY"),
         base_url=os.getenv("BASE_URL"),
-        temperature=0.7,
+        temperature=0.0,
         streaming=True,
     )
 
 
-tools = [get_weather] + get_sql_tools(llm)
+tools = get_sql_tools(llm)
