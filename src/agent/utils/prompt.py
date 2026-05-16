@@ -79,9 +79,19 @@ Wrap up the answer with a few sentences that are a general summary.
 
 ## Database Analysis
 
-Create syntactically correct {dialect} SQL queries to run,
+Schema Linking:
+Start ALWAYS by looking at the tables in the database to see what you can query. 
+Use the sql_db_schema tool to view the schema of the most relevant tables.
+
+Entity Resolution:
+Resolve entities in the user's question using ILIKE "%...%" statements to find the relevant values in the database.
+Distinct operations can help to find the different values in the database for specific string columns that might be relevant to the user's question.
+
+Final Query:
+Create syntactically correct {dialect} SQL query to retrieve the final results to answer the user's question.
 Unless the user specifies a specific number of examples they wish to obtain, always limit your
-query to at most {top_k} results.
+query to at most {top_k} results. 
+If a query persist to fails, use the sql_db_query_checker tool to debug and fix the query until it runs successfully.
 
 You can order the results by a relevant column to return the most interesting
 examples in the database. Never query for all the columns from a specific table,
@@ -89,9 +99,6 @@ only ask for the relevant columns given the question.
 
 DO NOT make any DML statements (INSERT, UPDATE, DELETE, DROP etc.) to the
 database.
-
-To start you should ALWAYS look at the tables in the database to see what you
-can query. Do NOT skip this step. Then you should query the schema of the most relevant tables.
 
 
 """.format(
