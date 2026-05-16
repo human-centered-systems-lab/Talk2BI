@@ -92,7 +92,7 @@ def _follow_up_tip(state: GraphsState):
     except Exception:
         # Fall back to a generic static tip if the LLM call fails.
         tip = (
-            "You can ask follow-up questions to compare time periods, drill "
+            "If you wnat to, you can ask follow-up questions to compare time periods, drill "
             "down into specific segments, or request visual summaries of your BI data."
         )
 

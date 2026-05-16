@@ -7,10 +7,21 @@ import streamlit as st
 from dotenv import load_dotenv
 
 from utils.astream import stream_graph_events_via_api
+from urllib.parse import urlunparse
+
+
+def get_base_url() -> str:
+    headers = st.context.headers
+
+    protocol = headers.get("x-forwarded-proto", "http")
+    host = headers.get("host", "localhost:8501")
+
+    return urlunparse((protocol, host, "", "", "", ""))
 
 APP_TITLE = "Talk2BI"
 APP_ICON = "💡"
 WELCOME_MESSAGE = "Hello! How can I assist you today?"
+BACKEND_URL = os.getenv("BACKEND_URL", "http://backend:8000")
 
 
 def _get_or_create_session_id() -> str:
@@ -129,7 +140,7 @@ async def main():
     def share_chat_dialog() -> None:
         """Dialog showing a shareable URL for the current chat session."""
 
-        app_base_url = os.getenv("TALK2BI_APP_URL", "http://localhost:8501").rstrip("/")
+        app_base_url = get_base_url()        
         current_session_id = st.session_state.get("session_id")
 
         if current_session_id:
@@ -165,6 +176,7 @@ async def main():
         try:
             api_base_url = os.getenv("TALK2BI_API_URL", "http://localhost:8000")
             base_url = api_base_url.rstrip("/")
+            app_base_url = get_base_url()
             recent_url = f"{base_url}/chat/recent-sessions/{user_id}?limit=10"
 
             resp = httpx.get(recent_url, timeout=5.0)
@@ -243,8 +255,8 @@ async def main():
         # Mirror the default used in ``stream_graph_events_via_api`` so that
         # history loading works out of the box when the backend runs on
         # http://localhost:8000.
-        api_base_url = os.getenv("TALK2BI_API_URL", "http://localhost:8000")
-        base_url = api_base_url.rstrip("/")
+        
+        base_url = BACKEND_URL.rstrip("/")
         history_url = f"{base_url}/chat/history/{session_id}"
 
         try:
@@ -316,7 +328,7 @@ async def main():
             st.session_state.messages.append(
                 {"role": "assistant", "content": final_text}
             )
-
+    
             # Store tip keyed by message index so it can be displayed with the
             # corresponding assistant message when rendering history.
             if follow_up_tip_text:
