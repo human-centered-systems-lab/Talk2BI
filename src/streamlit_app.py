@@ -174,10 +174,8 @@ async def main():
             return
 
         try:
-            api_base_url = os.getenv("TALK2BI_API_URL", "http://localhost:8000")
-            base_url = api_base_url.rstrip("/")
-            app_base_url = get_base_url()
-            recent_url = f"{base_url}/chat/recent-sessions/{user_id}?limit=10"
+            
+            recent_url = f"{BACKEND_URL}/chat/recent-sessions/{user_id}?limit=10"
 
             resp = httpx.get(recent_url, timeout=5.0)
             resp.raise_for_status()
