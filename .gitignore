@@ -1,3 +1,4 @@
 .env
 uv.lock
 __pycache__
+data/
