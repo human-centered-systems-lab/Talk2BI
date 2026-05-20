@@ -21,7 +21,7 @@ def get_base_url() -> str:
 APP_TITLE = "Talk2BI"
 APP_ICON = "💡"
 WELCOME_MESSAGE = "Hello! How can I assist you today?"
-BACKEND_URL = os.getenv("BACKEND_URL", "http://backend:8000")
+BACKEND_URL = os.getenv("BACKEND_URL", "http://localhost:8000")
 
 
 def _get_or_create_session_id() -> str:

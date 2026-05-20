@@ -6,7 +6,7 @@ import streamlit as st
 
 
 # Unified backend URL
-BACKEND_URL = os.getenv("BACKEND_URL", "http://backend:8000")
+BACKEND_URL = os.getenv("BACKEND_URL", "http://localhost:8000")
 
 
 async def stream_graph_events(
