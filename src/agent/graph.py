@@ -13,7 +13,6 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
-
 # Graph state definition (extendable with additional keys if needed)
 class GraphsState(TypedDict):
     """State for the main Talk2BI agent graph.
@@ -54,7 +53,7 @@ def _call_model(state: GraphsState):
         model=os.getenv("MODEL"),
         api_key=os.getenv("OPENAI_API_KEY"),
         base_url=os.getenv("BASE_URL"),
-        temperature=0.7,
+        temperature=0.0,
         streaming=True,
     )
 
@@ -80,7 +79,7 @@ def _follow_up_tip(state: GraphsState):
             model=os.getenv("MODEL"),
             api_key=os.getenv("OPENAI_API_KEY"),
             base_url=os.getenv("BASE_URL"),
-            temperature=0.7,
+            temperature=0.0,
             streaming=False,
         )
 
@@ -92,7 +91,7 @@ def _follow_up_tip(state: GraphsState):
     except Exception:
         # Fall back to a generic static tip if the LLM call fails.
         tip = (
-            "If you wnat to, you can ask follow-up questions to compare time periods, drill "
+            "You can ask follow-up questions to compare time periods, drill "
             "down into specific segments, or request visual summaries of your BI data."
         )
 

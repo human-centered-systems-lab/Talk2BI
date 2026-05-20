@@ -5,7 +5,7 @@ import json
 from fastapi import FastAPI
 from fastapi.responses import StreamingResponse
 
-from agent.agent import graph_runnable
+from agent.graph import graph_runnable
 from utils.chat_db import log_message, get_messages, get_recent_sessions_for_user
 
 

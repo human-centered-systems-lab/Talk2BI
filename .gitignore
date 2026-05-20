@@ -2,3 +2,6 @@
 uv.lock
 __pycache__
 data/
+.langgraph_api/
+src/db/
+src/db/MINIDEV/dev_tables.json
