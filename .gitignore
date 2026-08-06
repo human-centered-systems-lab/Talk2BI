@@ -1,7 +1,46 @@
 .env
+.venv/
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+*.egg-info/
+build/
+dist/
+.DS_Store
+
+# Reproducible Snowflake evaluation artifacts
+src/evaluation/knowledge-catalog/snowflake_catalog/
+src/evaluation/knowledge-catalog/enriched_catalog/
+src/evaluation/knowledge-catalog/described_catalog/
+src/evaluation/knowledge-catalog/profiled_catalog/
+src/evaluation/knowledge-catalog/spider2_schema_metadata/
+src/evaluation/knowledge-catalog/external_knowledge/
+src/evaluation/knowledge-catalog/spider2-snow.jsonl
+src/evaluation/knowledge-catalog/spider2-snow.manifest.json
+src/evaluation/knowledge-catalog/join_candidates/
+
+# The evaluation directory holds source alongside generated experiment data.
+# Ignore its contents rather than the directory itself -- git never descends
+# into an excluded directory, so the negation below only works this way.
+src/evaluation/knowledge-catalog/evaluation/*
+!src/evaluation/knowledge-catalog/evaluation/*.py
+
+src/evaluation/knowledge-catalog/examples/
+src/evaluation/knowledge-catalog/examples/**/snowflake_credential.json
+src/evaluation/exec_result/
+src/evaluation/sql/
+src/evaluation/compiled_semantic_catalog/
+src/evaluation/embedding_cache/
+src/evaluation/evaluation_results/
+src/evaluation/results/
+src/evaluation/results_csv/
+src/evaluation/end_to_end_agent_run/evaluation_results/
+src/evaluation/end_to_end_agent_run/results/
+src/evaluation/end_to_end_agent_run/results_csv/
+src/evaluation/semantic_catalog/PATENTS.json
+
 uv.lock
-__pycache__
-data/
-.langgraph_api/
-src/db/
-src/db/MINIDEV/dev_tables.json
+
+src/web/snowflake.log
