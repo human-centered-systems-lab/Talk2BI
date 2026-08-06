@@ -1,122 +1,141 @@
 # Talk2BI
 
-[![KIT h-lab](https://img.shields.io/badge/KIT-h--lab-green?style=flat-square)](https://h-lab.win.kit.edu)
-[![Streamlit](https://img.shields.io/badge/Streamlit-App-FF4B4B?logo=streamlit&logoColor=white)](https://streamlit.io)
-![LangGraph](https://img.shields.io/badge/LangGraph-Agent%20Orchestration-blue?logo=langchain&logoColor=white)
-![Databricks](https://img.shields.io/badge/Databricks-Data%20Platform-orange?logo=databricks&logoColor=white)
-[![FastAPI](https://img.shields.io/badge/FastAPI-Framework-009688?style=flat-square&logo=fastapi&logoColor=white)](https://fastapi.tiangolo.com)
-[![OpenAI](https://img.shields.io/badge/OpenAI-API-black?style=flat-square&logo=openai&logoColor=white)](https://openai.com/)
-[![Python](https://img.shields.io/badge/Python-3.14-blue.svg?style=flat-square)](https://www.python.org/)
-[![uv](https://img.shields.io/badge/uv-package%20manager-FFD43B?style=flat-square&logo=python&logoColor=black)](https://github.com/astral-sh/uv)
 
-Open source is a commitment to transparency, accountability, and collective improvement. Talk2BI follows this principle by making business intelligence accessible through natural language; without sacrificing rigor or reproducibility. Our goal is to remove barriers so that understanding, verifying, and extending AI-based systems is possible for everyone. Anyone should be able to use software, inspect its logic, understand how it works, and build upon it. Talk2BI supports persistent chat history and enables access to enterprise data, including Databricks-backed data sources. Built with LangGraph, FastAPI and Streamlit, as an open-access initiative by the [Human-Centered Systems Lab (h-Lab)](https://h-lab.win.kit.edu) at Karlsruhe Institute of Technology (KIT), Germany.
+[![Databricks](https://img.shields.io/badge/Databricks-FF3621?logo=databricks&logoColor=fff)](#)
+[![Snowflake](https://img.shields.io/badge/Snowflake-29B5E8?logo=snowflake&logoColor=fff)](#)
+[![Neo4J](https://img.shields.io/badge/Neo4j-008CC1?logo=neo4j&logoColor=white)](#)
+[![ChatGPT](https://custom-icon-badges.demolab.com/badge/OpenAI%20Compatible-74aa9c?logo=openai)](#)
+[![Supabase](https://img.shields.io/badge/Supabase-3FCF8E?logo=supabase&logoColor=fff)](#)
+[![Docker](https://img.shields.io/badge/Docker-2496ED?logo=docker&logoColor=fff)](#)
+[![Next.js](https://img.shields.io/badge/Assistant%20UI-black?logo=next.js&logoColor=white)](#)
+[![Bun](https://img.shields.io/badge/Bun-000?logo=bun&logoColor=fff)](#)
 
-![App](./demo/app_screenshot.gif)
+Talk2BI is an open-source data assistant: ask a question in plain language and it writes the SQL, runs it against your warehouse, and answers you in the language you asked in. A property graph of your tables, columns, joins, and reference documents keeps those answers grounded in what your data actually means. 
 
-## Get started
+![App-Chat](./demo/app-chat.png)
 
-1. Install uv  
-   https://docs.astral.sh/uv/getting-started/installation/
+Open source is how data stays free. However, most production-grade text-to-sql data assistants are **not open source** and expose only a narrow text box on top of a proprietary stack. 
+Talk2BI addresses this by providing a research-first open-source application:
 
-2. Install dependencies
-   ```bash
-   uv sync
-   ```
+- A **persistent, multi-thread chat interface** built on Assistant UI.
+- A **single, well-defined persistence layer** for chat history that can be replaced with your own database.
+- A **pluggable model abstraction layer** that lets you seamlessly switch between providers (e.g., OpenAI, Azure, or local models like Ollama or LM-Studio).
+- A **Property graph** that makes structured and unstructured data and its relationships first-class and navigable.
 
-3. Create your .env file
-   ```bash
-   cp .env.example .env
-   ```
+![App-Graph](./demo/app-graph.png)
 
-4. Configure environment variables for your AI model and database connection (Databricks)
-   ```bash
-   # Edit .env and set your keys
-   OPENAI_API_KEY=...
-   ...
-   DATABRICKS_HOST=...
-   ...
-   ```
+## Technology Stack
 
-5. Run the FastAPI backend with streaming
+- **Frontend**: Next.js 16+ with React 19 and Assistant UI for pre-built conversational interface
+- **AI Engine**: Vercel AI SDK using OpenAI Compatible Models
+- **Data Platforms**: Snowflake, Databricks, Neo4j
+- **UI**: Radix UI components with Tailwind CSS
 
-   The backend exposes the LangGraph agent behind a FastAPI app with a
-   streaming endpoint using `astream_events`.
+## Prerequisites
 
-   ```bash
-   cd src
-   uv run uvicorn api.route:app --host 0.0.0.0 --port 8000 --reload
-   ```
+- Bun 1.2+ (or Node.js 20+ with npm)
+- Docker, if you want to run Neo4j locally
+- A Supabase project
+- A Neo4j instance (Docker, local Neo4j Desktop, or managed AuraDB)
+- A Snowflake or Databricks Instance
 
-   - Health check: `GET /health`
-   - Streaming endpoint: `POST /chat/stream`
+## Run Talk2BI
 
-   Example request body:
+1. Create a supabase project.
 
-   ```json
-   {
-     "messages": [
-       {"role": "user", "content": "Hello!"}
-     ]
-   }
-   ```
-
-   The response is an SSE (Server-Sent Events) stream forwarding the
-   raw LangGraph `astream_events` for maximum flexibility on the client
-   side.
-
-   By default, the Streamlit frontend talks to the backend at
-   `http://localhost:8000`.
-
-6. Run the Streamlit application
-   ```bash
-   cd src
-   uv run streamlit run streamlit_app.py
-   ```
-
-7. Inspect the (local db using)
-sqlite3 data/chat_logs.db "SELECT id, session_id, role, substr(content,1,80) AS snippet, created_at FROM chat_messages ORDER BY id DESC LIMIT 20;"
+    Login to https://supabase.com/
 
 
-## Main code structure
+2. Get your a Neo4j Instance. Either visit https://console.neo4j.io/ or run one in Docker on your machine (Docker must run)
 
-```bash
-src/
-├── streamlit_app.py    # Streamlit UI
-├── agent/
-│   ├── agent.py        # Main agent
-│   └── utils/
-│       ├── prompt.py   # agent prompt
-│       └── tools.py    # Agent tools
-├── utils/              
-│   └── astream.py      # Stream util
-└── api/              
-    └── route.py      # API route  
-```
+    ```bash
+    docker run -d --name talk2bi-neo4j -p 7474:7474 -p 7687:7687 -e NEO4J_AUTH=neo4j/password -v talk2bi-neo4j-data:/data neo4j:2026.05
+    ```
 
-- To change the **agent behavior** (how queries are interpreted, how tools are used, etc.), edit `src/agent/agent.py` and the helper files in `src/agent/utils/`.
-- To change the **application UI and overall flow**, edit `src/streamlit_app.py`.
-- To adjust **streaming behaviour**, see `src/utils/astream.py`.
+    The container publishes two ports: Bolt on `7687`, which is what the app connects to, and the Neo4j Browser on http://localhost:7474, where you can sign in with `neo4j` / `password` to inspect the graph. The credentials above match the `NEO4J_*` defaults in `.env.example`, so they work without further changes.
 
-## Contributing
+    Two things worth knowing. `NEO4J_AUTH` only takes effect on the very first start, because the password is then stored in the `talk2bi-neo4j-data` volume — to change it later, remove the container and the volume rather than editing the flag:
 
-We welcome contributions from everyone! Whether it’s bug fixes, new features, documentation improvements, or ideas, your help makes Talk2BI better.
+    ```bash
+    docker rm -f talk2bi-neo4j && docker volume rm talk2bi-neo4j-data
+    ```
 
-To contribute:
-1.	Fork the repo and create a branch.
-2.	Make changes and follow PEP8/code style.
-3.	Commit with a clear message and push your branch.
-4.	Open a Pull Request describing your changes.
+    And Neo4j rejects passwords shorter than eight characters, so pick a longer one if you replace the default. The named volume keeps your graph across restarts; use `docker stop talk2bi-neo4j` and `docker start talk2bi-neo4j` to pause and resume without losing data.
 
-Feel free to also report bugs via GitHub issues.
+    Talk2BI stores its embeddings in Neo4j's native vector indexes, so the release matters: `2026.05` above is the line Talk2BI is developed against, and the `5.26` LTS works too. No APOC or GDS plugins are required.
 
-## Acknowledgements
+    If the ports are already taken, another Neo4j is likely running — check with `docker ps` and reuse it instead of starting a second one.
 
-Talk2BI is made possible thanks to the incredible work of the open-source community. Thank you to all the developers, maintainers, and contributors whose tools, libraries, and ideas we rely on every day. For questions or feedback, you can reach out to Niklas Wagner at [niklas.wagner@kit.edu](mailto:niklas.wagner@kit.edu).
+3. Ensure you got a Databricks (Free Edition) or Snowflake Project
 
-## License
+4. Copy .env.example to .env.local and add your credentials
 
-This project is licensed under the MIT License. See the [LICENSE](LICENSE)
-file for full license text.
+    ```bash
+    cd src/my-app
+    cp .env.example .env.local
+    ```
 
+5. Install Bun. Visit https://bun.sh/docs/installation, or on macOS and Linux run
 
-![Human-Centered Systems Lab (h-Lab)](https://h-lab.win.kit.edu/img/LOGO_lang_klein_RZ.svg)
+    ```bash
+    curl -fsSL https://bun.sh/install | bash
+    ```
+
+    On Windows, use `powershell -c "irm bun.sh/install.ps1 | iex"`.
+
+6. Install the packages from the app directory
+
+    ```bash
+    cd src/my-app
+    bun install
+    ```
+
+7. Finally, run the app local on your machine
+
+    ```bash
+    bun run dev
+    ```
+
+    The app is then served at http://localhost:3000.
+
+## Acknowledges
+
+A collaboration of contributors from
+
+<table>
+  <tr>
+    <td align="center" width="25%">
+      <a href="https://www.kit.edu">
+        <img src="https://www.kit.edu/img/intern/kit_logo_V2_de.svg" alt="KIT – Karlsruhe Institute of Technology" height="42">
+      </a>
+      <br>
+      <sub>Karlsruhe Institute of Technology</sub>
+    </td>
+    <td align="center" width="25%">
+      <a href="https://www.enbw.com">
+        <img src="https://www.enbw.com/media/logos/enbw-logo/enbw-logo-standard-blauorange-srgb_1727080886669.svg" alt="EnBW Energie Baden-Württemberg AG" height="42">
+      </a>
+      <br>
+      <sub>EnBW Energie Baden-Württemberg AG</sub>
+    </td>
+    <td align="center" width="25%">
+      <a href="https://www.kcl.ac.uk">
+        <img src="https://www.kcl.ac.uk/SiteElements/2017/images/kcl-logo.svg" alt="King's College London" height="42">
+      </a>
+      <br>
+      <sub>King's College London</sub>
+    </td>
+    <td align="center" width="25%">
+      <a href="https://menschki.org">
+        <img src="https://menschki.org/media/MenschKI-Logo.webp" alt="MenschKI!" height="42">
+      </a>
+      <br>
+      <sub>MenschKI!</sub>
+    </td>
+  </tr>
+</table>
+
+KIT, EnBW, King's College London, and MenschKI! contributed under a shared mission to keep production-grade data access open — research-first, transparent end to end, and owned by the teams who rely on it.
+
+Founder: Niklas Wagner — [niklas.wagner@kit.edu](mailto:niklas.wagner@kit.edu)
+
