@@ -4,6 +4,7 @@
 [![Databricks](https://img.shields.io/badge/Databricks-FF3621?logo=databricks&logoColor=fff)](#)
 [![Snowflake](https://img.shields.io/badge/Snowflake-29B5E8?logo=snowflake&logoColor=fff)](#)
 [![Neo4J](https://img.shields.io/badge/Neo4j-008CC1?logo=neo4j&logoColor=white)](#)
+[![OKF v0.2](https://img.shields.io/badge/Open%20Knowledge%20Format%20v0.2-4285F4?logo=google&logoColor=white)](#)
 [![ChatGPT](https://custom-icon-badges.demolab.com/badge/OpenAI%20Compatible-74aa9c?logo=openai)](#)
 [![Supabase](https://img.shields.io/badge/Supabase-3FCF8E?logo=supabase&logoColor=fff)](#)
 [![Docker](https://img.shields.io/badge/Docker-2496ED?logo=docker&logoColor=fff)](#)
@@ -14,13 +15,14 @@ Talk2BI is an open-source data assistant: ask a question in plain language and i
 
 ![App-Chat](./demo/app-chat.png)
 
-Open source is how data stays free. However, most production-grade text-to-sql data assistants are **not open source** and expose only a narrow text box on top of a proprietary stack. 
+Text-to-SQL systems can achieve very strong results, but many practical deployments show that they often need to be complemented with domain references and linked to business context to produce reliable, usable answers.
 Talk2BI addresses this by providing a research-first open-source application:
 
 - A **persistent, multi-thread chat interface** built on Assistant UI.
 - A **single, well-defined persistence layer** for chat history that can be replaced with your own database.
 - A **pluggable model abstraction layer** that lets you seamlessly switch between providers (e.g., OpenAI, Azure, or local models like Ollama or LM-Studio).
 - A **Property graph** that makes structured and unstructured data and its relationships first-class and navigable.
+- **Open Knowledge Format (OKF) v0.2** for portable, structured data context and reference knowledge.
 
 ![App-Graph](./demo/app-graph.png)
 
@@ -104,38 +106,44 @@ A collaboration of contributors from
 
 <table>
   <tr>
-    <td align="center" width="25%">
+    <td align="center" width="20%">
       <a href="https://www.kit.edu">
         <img src="https://www.kit.edu/img/intern/kit_logo_V2_de.svg" alt="KIT – Karlsruhe Institute of Technology" height="42">
       </a>
       <br>
       <sub>Karlsruhe Institute of Technology</sub>
     </td>
-    <td align="center" width="25%">
+    <td align="center" width="20%">
       <a href="https://www.enbw.com">
         <img src="https://www.enbw.com/media/logos/enbw-logo/enbw-logo-standard-blauorange-srgb_1727080886669.svg" alt="EnBW Energie Baden-Württemberg AG" height="42">
       </a>
       <br>
       <sub>EnBW Energie Baden-Württemberg AG</sub>
     </td>
-    <td align="center" width="25%">
+    <td align="center" width="20%">
       <a href="https://www.kcl.ac.uk">
         <img src="https://www.kcl.ac.uk/SiteElements/2017/images/kcl-logo.svg" alt="King's College London" height="42">
       </a>
       <br>
       <sub>King's College London</sub>
     </td>
-    <td align="center" width="25%">
+    <td align="center" width="20%">
       <a href="https://menschki.org">
         <img src="https://menschki.org/media/MenschKI-Logo.webp" alt="MenschKI!" height="42">
       </a>
       <br>
       <sub>MenschKI!</sub>
     </td>
+    <td align="center" width="20%">
+      <a href="https://theodi.org/">
+        <img src="https://data.org/wp-content/uploads/2021/10/logo-ODI.png" alt="Open Data Institute" height="42">
+      </a>
+      <br>
+      <sub>Open Data Institute</sub>
+    </td>
   </tr>
 </table>
 
-KIT, EnBW, King's College London, and MenschKI! contributed under a shared mission to keep production-grade data access open — research-first, transparent end to end, and owned by the teams who rely on it.
+KIT, EnBW, King's College London, MenschKI!, and the [Open Data Institute (ODI)](https://theodi.org/) contributed under a shared mission for research-first, transparent end to end data assistants. The Talk2BI idea has been applied to an enterprise use case, achieving 97.14% execution accuracy.
 
 Founder: Niklas Wagner — [niklas.wagner@kit.edu](mailto:niklas.wagner@kit.edu)
-
