@@ -58,29 +58,25 @@ function buildNvlGraph(graph: GraphVisualization | null): {
           ? "#111827"
           : node.type === "suggestion"
             ? "#d97706"
-            : node.type === "dataset"
+            : node.type === "bundle"
               ? "#0891b2"
-              : node.type === "schema"
-                ? "#0d9488"
-                : node.type === "table"
+              : node.type === "concept"
                   ? "#2563eb"
-                  : node.type === "reference"
+                  : node.type === "section"
                     ? "#7c3aed"
-                    : node.type === "chunk"
-                      ? "#9333ea"
+                    : node.type === "tag"
+                      ? "#0d9488"
                       : "#64748b",
       size:
         node.type === "application"
           ? 56
           : node.type === "suggestion"
             ? 30
-            : node.type === "dataset"
+            : node.type === "bundle"
               ? 52
-              : node.type === "schema"
-                ? 46
-                : node.type === "table"
+              : node.type === "concept"
                   ? 44
-                  : node.type === "reference"
+                  : node.type === "section"
                     ? 32
                     : 24,
     })),
@@ -90,8 +86,8 @@ function buildNvlGraph(graph: GraphVisualization | null): {
       to: edge.target,
       caption: edge.label,
       type: edge.label,
-      color: edge.label.startsWith("JOINS_ON") ? "#16a34a" : "#94a3b8",
-      width: edge.label.startsWith("JOINS_ON") ? 2.5 : 1.5,
+      color: edge.label === "LINKS_TO" ? "#16a34a" : "#94a3b8",
+      width: edge.label === "LINKS_TO" ? 2.5 : 1.5,
     })),
   };
 }
@@ -107,7 +103,7 @@ export function VisualizationTab({
         <div>
           <h2 className="text-base font-semibold">Graph Visualization</h2>
           <p className="mt-1 text-sm text-muted-foreground">
-            Tables, columns, and relationships currently stored in the graph.
+            OKF bundles, concepts, sections, links, and tags currently stored in Neo4j.
           </p>
         </div>
         <Button
@@ -201,17 +197,13 @@ function GraphVisualizationPanel({
       <div className="flex flex-wrap items-center justify-between gap-3 border-b bg-muted/30 px-3 py-2 text-sm">
         <div className="flex items-center gap-2 font-medium">
           <NetworkIcon className="size-4" />
-          {countByType("dataset")} datasets
+          {countByType("bundle")} bundles
           <span className="text-muted-foreground">/</span>
-          {countByType("schema")} schemas
+          {countByType("concept")} concepts
           <span className="text-muted-foreground">/</span>
-          {countByType("table")} tables
+          {countByType("section")} sections
           <span className="text-muted-foreground">/</span>
-          {countByType("column")} columns
-          <span className="text-muted-foreground">/</span>
-          {countByType("reference")} references
-          <span className="text-muted-foreground">/</span>
-          {countByType("chunk")} chunks
+          {countByType("tag")} tags
           <span className="text-muted-foreground">/</span>
           {countByType("suggestion")} suggestions
         </div>

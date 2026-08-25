@@ -237,7 +237,7 @@ export function DatasetsTab({
         <div>
           <h2 className="text-base font-semibold">Datasets</h2>
           <p className="mt-1 text-sm text-muted-foreground">
-            Data sources and their tables stored in Context.
+            Warehouse schemas stored as OKF bundles and table concepts.
           </p>
         </div>
         <div className="flex gap-2">
@@ -424,8 +424,8 @@ export function DatasetsTab({
           <DialogHeader>
             <DialogTitle>Remove dataset?</DialogTitle>
             <DialogDescription>
-              This removes {databaseToRemove} and all of its tables and columns
-              from Context. Other datasets and references remain unchanged.
+              This removes {databaseToRemove} and its app-managed OKF bundle.
+              Other bundles and references remain unchanged.
             </DialogDescription>
           </DialogHeader>
           <DialogFooter>

@@ -1,27 +1,26 @@
-import { requireGraphUser } from "@/lib/graph/auth";
-import { createEmbeddings, getColumnEmbeddingText } from "@/lib/ai/embeddings";
-import {
-  ensureEmbeddingIndexes,
-  ensureNodeTypes,
-  getNeo4jDriver,
-} from "@/lib/tools/tool_read_knowledge_store";
 import type { Session } from "neo4j-driver";
+
+import { requireGraphUser } from "@/lib/graph/auth";
+import {
+  getAppMetadata,
+  listCatalogTables,
+  rebuildTableBodies,
+  type CatalogColumn,
+  type TableMetadata,
+} from "@/lib/okf/catalog";
+import {
+  getNeo4jDriver,
+  getNeo4jSession,
+  replaceBundleConcepts,
+} from "@/lib/okf/store";
 
 function getErrorMessage(error: unknown) {
   return error instanceof Error ? error.message : "Unknown schema graph error";
 }
 
-function normalizeSynonyms(value: unknown): string[] {
+function normalizeSynonyms(value: unknown) {
   if (!Array.isArray(value)) return [];
-
-  return Array.from(
-    new Set(
-      value
-        .filter((item): item is string => typeof item === "string")
-        .map((item) => item.trim())
-        .filter(Boolean),
-    ),
-  );
+  return Array.from(new Set(value.filter((item): item is string => typeof item === "string").map((item) => item.trim()).filter(Boolean)));
 }
 
 export async function GET(req: Request) {
@@ -30,57 +29,18 @@ export async function GET(req: Request) {
   } catch (error) {
     return Response.json({ error: getErrorMessage(error) }, { status: 401 });
   }
-
-  const { searchParams } = new URL(req.url);
-  const tableFullName = searchParams.get("tableFullName");
-
-  if (!tableFullName) {
-    return Response.json({ error: "Missing tableFullName." }, { status: 400 });
-  }
-
-  const driver = getNeo4jDriver();
-  if (!driver) {
-    return Response.json({ error: "Neo4j credentials not configured." }, { status: 500 });
-  }
-
+  const tableFullName = new URL(req.url).searchParams.get("tableFullName");
+  if (!tableFullName) return Response.json({ error: "Missing tableFullName." }, { status: 400 });
+  const graphDriver = getNeo4jDriver();
+  if (!graphDriver) return Response.json({ error: "Neo4j credentials not configured." }, { status: 500 });
   let session: Session | null = null;
-
   try {
-    session = driver.session();
-    const result = await session.run(
-      `
-        MATCH (:Table { fullName: $tableFullName })-[:HAS_COLUMN]->(column:Column)
-        RETURN
-          column.fullName AS fullName,
-          column.name AS name,
-          column.sourceName AS sourceName,
-          column.sqlIdentifier AS sqlIdentifier,
-          column.sqlQualifiedName AS sqlQualifiedName,
-          column.dataType AS dataType,
-          column.ordinalPosition AS ordinalPosition,
-          coalesce(column.description, "") AS description,
-          coalesce(column.synonyms, []) AS synonyms
-        ORDER BY column.ordinalPosition, column.name
-      `,
-      { tableFullName },
+    session = getNeo4jSession(graphDriver);
+    const table = (await listCatalogTables(session)).find(
+      ({ metadata }) => metadata.fullName === tableFullName,
     );
-
-    return Response.json({
-      columns: result.records.map((record) => ({
-        fullName: record.get("fullName") as string,
-        name: record.get("name") as string,
-        sourceName: record.get("sourceName") as string,
-        sqlIdentifier: record.get("sqlIdentifier") as string | null,
-        sqlQualifiedName: record.get("sqlQualifiedName") as string | null,
-        dataType: record.get("dataType") as string,
-        ordinalPosition:
-          typeof record.get("ordinalPosition") === "number"
-            ? (record.get("ordinalPosition") as number)
-            : record.get("ordinalPosition").toNumber(),
-        description: record.get("description") as string,
-        synonyms: normalizeSynonyms(record.get("synonyms")),
-      })),
-    });
+    if (!table) return Response.json({ error: "Table not found." }, { status: 404 });
+    return Response.json({ columns: table.metadata.columns });
   } catch (error) {
     return Response.json({ error: getErrorMessage(error) }, { status: 500 });
   } finally {
@@ -94,82 +54,43 @@ export async function PATCH(req: Request) {
   } catch (error) {
     return Response.json({ error: getErrorMessage(error) }, { status: 401 });
   }
-
   const body = (await req.json().catch(() => ({}))) as {
     fullName?: string;
     description?: string;
-    synonyms?: string[];
+    synonyms?: unknown;
   };
-
-  if (!body.fullName) {
-    return Response.json({ error: "Missing column fullName." }, { status: 400 });
-  }
-
-  const driver = getNeo4jDriver();
-  if (!driver) {
-    return Response.json({ error: "Neo4j credentials not configured." }, { status: 500 });
-  }
-
+  if (!body.fullName) return Response.json({ error: "Missing column fullName." }, { status: 400 });
+  const graphDriver = getNeo4jDriver();
+  if (!graphDriver) return Response.json({ error: "Neo4j credentials not configured." }, { status: 500 });
   let session: Session | null = null;
-
   try {
-    const description = body.description ?? "";
+    session = getNeo4jSession(graphDriver);
+    const tables = await listCatalogTables(session);
+    const owner = tables.find(({ metadata }) => metadata.columns.some((column) => column.fullName === body.fullName));
+    if (!owner) return Response.json({ error: "Column not found." }, { status: 404 });
+    const description = body.description?.trim() ?? "";
     const synonyms = normalizeSynonyms(body.synonyms);
-    session = driver.session();
-    const columnResult = await session.run(
-      `
-        MATCH (column:Column { fullName: $fullName })
-        OPTIONAL MATCH (dataset:Dataset)-[:HAS_SCHEMA]->(:Schema)-[:HAS_TABLE]->(:Table)-[:HAS_COLUMN]->(column)
-        RETURN
-          column.name AS name,
-          coalesce(dataset.dialect, "Snowflake") AS dialect
-      `,
-      {
-        fullName: body.fullName,
-      },
+    let updatedColumn: CatalogColumn | null = null;
+    await replaceBundleConcepts(session, owner.concept.bundle, (concepts) =>
+      rebuildTableBodies(
+        concepts.map((concept) => {
+          const metadata = getAppMetadata(concept);
+          if (metadata?.kind !== "table" || metadata.fullName !== owner.metadata.fullName) return concept;
+          const tableMetadata: TableMetadata = {
+            ...metadata,
+            columns: metadata.columns.map((column) => {
+              if (column.fullName !== body.fullName) return column;
+              updatedColumn = { ...column, description, synonyms };
+              return updatedColumn;
+            }),
+          };
+          return { ...concept, extraFrontmatter: { talk2bi: tableMetadata } };
+        }),
+      ),
     );
-    const columnName = columnResult.records[0]?.get("name") as string | undefined;
-    const dialect =
-      (columnResult.records[0]?.get("dialect") as string | undefined) ??
-      "Snowflake";
-
-    if (!columnName) {
-      return Response.json({ error: "Column not found." }, { status: 404 });
-    }
-
-    const embeddingText = getColumnEmbeddingText(
-      columnName,
-      description,
-      synonyms,
-    );
-    const [embedding] = await createEmbeddings([embeddingText]);
-    await ensureEmbeddingIndexes(session, embedding.length);
-    await ensureNodeTypes(session);
-
-    await session.run(
-      `
-        MATCH (column:Column { fullName: $fullName })
-        SET
-          column.type = $type,
-          column.description = $description,
-          column.synonyms = $synonyms,
-          column.embeddingText = $embeddingText,
-          column.embedding = $embedding
-      `,
-      {
-        fullName: body.fullName,
-        type: `${dialect} Column`,
-        description,
-        synonyms,
-        embeddingText,
-        embedding,
-      },
-    );
-
+    if (!updatedColumn) return Response.json({ error: "Column not found." }, { status: 404 });
     return Response.json({
       success: true,
-      embeddingText,
-      embeddingDimensions: embedding.length,
       synonyms,
     });
   } catch (error) {

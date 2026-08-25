@@ -159,8 +159,8 @@ export function ReferencesTab({
         <div>
           <h2 className="text-base font-semibold">References</h2>
           <p className="mt-1 text-sm text-muted-foreground">
-            Upload global Markdown references or map them to a dataset.
-            References are chunked, embedded, and stored in Context.
+            Upload Markdown as OKF Reference concepts or map it to datasets.
+            Content is split into the same ordered H1 sections used by retrieval.
           </p>
         </div>
         <Button variant="outline" onClick={() => void load()} disabled={loading}>
@@ -177,8 +177,7 @@ export function ReferencesTab({
 
       {uploadResult ? (
         <div className="rounded-md border border-emerald-200 bg-emerald-50 p-3 text-sm text-emerald-800 dark:border-emerald-900/50 dark:bg-emerald-950/30 dark:text-emerald-200">
-          Added {uploadResult.title} with {uploadResult.chunkCount} chunks and{" "}
-          {uploadResult.embeddingDimensions} embedding dimensions.
+          Added {uploadResult.title} with {uploadResult.chunkCount} OKF sections.
         </div>
       ) : null}
 
@@ -365,7 +364,7 @@ export function ReferencesTab({
             <DialogTitle>Delete reference?</DialogTitle>
             <DialogDescription>
               This permanently removes {referenceToDelete?.title}, all of its
-              chunks, and its dataset mappings from Context.
+              OKF sections, and its dataset mappings from Neo4j.
             </DialogDescription>
           </DialogHeader>
           <DialogFooter>

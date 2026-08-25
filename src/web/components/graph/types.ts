@@ -6,6 +6,7 @@ export type WarehouseTable = {
   database: string;
   schema: string;
   name: string;
+  description?: string;
 };
 
 export type InitResult = {
@@ -16,8 +17,6 @@ export type InitResult = {
 
 export type DescriptionUpdateResult = {
   success: true;
-  embeddingText: string;
-  embeddingDimensions: number;
   synonyms?: string[];
 };
 
@@ -87,12 +86,10 @@ export type GraphVisualizationNode = {
   label: string;
   type:
     | "application"
-    | "dataset"
-    | "schema"
-    | "table"
-    | "column"
-    | "reference"
-    | "chunk"
+    | "bundle"
+    | "concept"
+    | "section"
+    | "tag"
     | "suggestion";
   detail: string;
 };
@@ -126,7 +123,6 @@ export type DomainKnowledgeUploadResult = {
     datasetNames: string[];
     chunkCount: number;
     contentLength: number;
-    embeddingDimensions: number;
   };
   documents: DomainKnowledgeDocument[];
 };

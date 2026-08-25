@@ -30,6 +30,33 @@ function groupTablesByDatabase(tables: WarehouseTable[]) {
   return groups;
 }
 
+export function databricksTableFromRow(
+  database: string,
+  row: Record<string, unknown>,
+): WarehouseTable {
+  return {
+    database,
+    schema: readString(row, "table_schema"),
+    name: readString(row, "table_name"),
+    description: readString(row, "table_comment"),
+  };
+}
+
+export function databricksColumnFromRow(
+  database: string,
+  row: Record<string, unknown>,
+): WarehouseColumn {
+  return {
+    database: readString(row, "table_catalog") || database,
+    schema: readString(row, "table_schema"),
+    name: readString(row, "table_name"),
+    column: readString(row, "column_name"),
+    dataType: readString(row, "full_data_type") || readString(row, "data_type"),
+    description: readString(row, "column_comment"),
+    ordinalPosition: readNumber(row, "ordinal_position"),
+  };
+}
+
 export async function listDatabricksDatabases(): Promise<WarehouseDatabase[]> {
   const rows = await executeDatabricksQuery("SHOW CATALOGS");
 
@@ -46,18 +73,14 @@ export async function listDatabricksTables(
 ): Promise<WarehouseTable[]> {
   const catalog = quoteDatabricksIdentifier(database);
   const rows = await executeDatabricksQuery(`
-    SELECT table_schema, table_name
+    SELECT table_schema, table_name, comment AS table_comment
     FROM ${catalog}.information_schema.tables
     WHERE table_schema <> 'information_schema'
     ORDER BY table_schema, table_name
   `);
 
   return rows
-    .map((row) => ({
-      database,
-      schema: readString(row, "table_schema"),
-      name: readString(row, "table_name"),
-    }))
+    .map((row) => databricksTableFromRow(database, row))
     .filter((table) => table.schema.length > 0 && table.name.length > 0);
 }
 
@@ -79,23 +102,15 @@ export async function listDatabricksColumns(
         column_name,
         data_type,
         full_data_type,
-        ordinal_position
+        ordinal_position,
+        comment AS column_comment
       FROM ${catalog}.information_schema.columns
       WHERE concat(table_schema, '.', table_name) IN (${tableFilter})
       ORDER BY table_schema, table_name, ordinal_position
     `);
 
     columns.push(
-      ...rows.map((row) => ({
-        database: readString(row, "table_catalog") || database,
-        schema: readString(row, "table_schema"),
-        name: readString(row, "table_name"),
-        column: readString(row, "column_name"),
-        dataType:
-          readString(row, "full_data_type") || readString(row, "data_type"),
-        // Databricks counts columns from 0, Snowflake from 1.
-        ordinalPosition: readNumber(row, "ordinal_position") + 1,
-      })),
+      ...rows.map((row) => databricksColumnFromRow(database, row)),
     );
   }
 
@@ -168,7 +183,7 @@ export async function listDatabricksJoins(
       }
 
       const joinKey = `${sourceKey}->${targetKey}`;
-      const join = joins.get(joinKey) ?? {
+      const join: WarehouseJoin = joins.get(joinKey) ?? {
         source,
         target,
         columns: [],

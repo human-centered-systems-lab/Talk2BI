@@ -304,7 +304,8 @@ export function JoinsTab({
         <div>
           <h2 className="text-base font-semibold">Joins</h2>
           <p className="mt-1 text-sm text-muted-foreground">
-            Create JOINS_ON relationships between column nodes.
+            Create OKF Join Reference concepts. Columns remain metadata inside
+            their table concepts.
           </p>
         </div>
         <div className="flex gap-2">
@@ -537,7 +538,7 @@ export function JoinsTab({
           <DialogHeader>
             <DialogTitle>Delete join</DialogTitle>
             <DialogDescription>
-              This removes the JOINS_ON relationship from the graph.
+              This removes the OKF Join Reference concept from the graph.
             </DialogDescription>
           </DialogHeader>
           {joinToDelete ? (

@@ -10,9 +10,9 @@ import {
 import fs from "fs";
 import path from "path";
 import { createClient } from "@/lib/supabase/server";
-import { resolveModel } from "@/lib/ai/model";
+import { resolveModel } from "@/lib/ai/models";
 import { tool_thinking } from "@/lib/tools/tool_thinking";
-import { tool_read_knowledge_store } from "@/lib/tools/tool_read_knowledge_store";
+import { tool_retrieve_okf_context } from "@/lib/tools/tool_retrieve_okf_context";
 import { tool_snowflake_sql_query } from "@/lib/tools/tool_snowflake_sql_query";
 import { tool_databricks_sql_query } from "@/lib/tools/tool_databricks_sql_query";
 
@@ -22,6 +22,20 @@ const openai = createOpenAI({
 });
 
 const maxSteps = 25;
+
+function latestUserQuestion(messages: UIMessage[]) {
+  for (let index = messages.length - 1; index >= 0; index -= 1) {
+    const message = messages[index];
+    if (message?.role !== "user") continue;
+    const text = message.parts
+      .filter((part): part is Extract<typeof part, { type: "text" }> => part.type === "text")
+      .map((part) => part.text)
+      .join("\n")
+      .trim();
+    if (text) return text;
+  }
+  throw new Error("No user question was provided.");
+}
 
 export async function POST(req: Request) {
   const supabase = await createClient();
@@ -39,6 +53,8 @@ export async function POST(req: Request) {
   } = await req.json();
 
   const selectedModel = resolveModel(metadata?.custom?.model);
+  const model = openai.chat(selectedModel);
+  const question = latestUserQuestion(messages);
 
   const basePrompt = fs
     .readFileSync(
@@ -49,14 +65,14 @@ export async function POST(req: Request) {
     .replace("{{USER_EMAIL}}", userEmail);
 
   const result = streamText({
-    model: openai.chat(selectedModel),
+    model,
     messages: await convertToModelMessages(messages),
     stopWhen: stepCountIs(maxSteps),
     system: basePrompt,
     temperature: 0.0,
     tools: {
       tool_thinking: tool_thinking(),
-      tool_read_knowledge_store: tool_read_knowledge_store(),
+      tool_retrieve_okf_context: tool_retrieve_okf_context({ question, model }),
       tool_snowflake_sql_query: tool_snowflake_sql_query(),
       tool_databricks_sql_query: tool_databricks_sql_query(),
       ...frontendTools(tools ?? {}),
@@ -67,14 +83,12 @@ export async function POST(req: Request) {
         reasoningSummary: "auto",
       },
     },
-    // Force tool calls for the first two steps
     prepareStep: async ({ stepNumber }) => {
       if (stepNumber === 0) {
         return {
-          toolChoice: { type: "tool", toolName: "tool_read_knowledge_store" },
+          toolChoice: { type: "tool", toolName: "tool_retrieve_okf_context" },
         };
       }
-      // Later steps get default behavior
       return {};
     },
   });

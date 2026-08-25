@@ -1,143 +1,126 @@
-import { requireGraphUser } from "@/lib/graph/auth";
-import { getNeo4jDriver } from "@/lib/tools/tool_read_knowledge_store";
 import type { Session } from "neo4j-driver";
+
+import { requireGraphUser } from "@/lib/graph/auth";
+import {
+  getAppMetadata,
+  joinInput,
+  listCatalogJoins,
+  listCatalogTables,
+  rebuildTableBodies,
+  type CatalogColumn,
+  type JoinMetadata,
+  type TableMetadata,
+} from "@/lib/okf/catalog";
+import {
+  getNeo4jDriver,
+  getNeo4jSession,
+  replaceBundleConcepts,
+  stableHash,
+} from "@/lib/okf/store";
 
 function getErrorMessage(error: unknown) {
   return error instanceof Error ? error.message : "Unknown schema graph error";
 }
 
-function readRequiredString(value: unknown) {
+function required(value: unknown) {
   return typeof value === "string" ? value.trim() : "";
 }
 
-function readNeo4jInteger(value: unknown) {
-  if (typeof value === "number") return value;
-  if (
-    value &&
-    typeof value === "object" &&
-    "toNumber" in value &&
-    typeof value.toNumber === "function"
-  ) {
-    return value.toNumber() as number;
-  }
-  return 0;
+function columnKey(left: string, right: string) {
+  return [left, right].sort().join("::");
 }
 
-type GraphJoin = {
-  id: string;
-  leftTableFullName: string;
-  leftTableName: string;
-  rightTableFullName: string;
-  rightTableName: string;
-  leftColumnFullName: string;
-  leftColumnName: string;
-  rightColumnFullName: string;
-  rightColumnName: string;
-  relationshipType: string;
-  condition: string;
-  columnCount: number;
-};
-
-type ColumnForSuggestion = {
-  tableFullName: string;
-  tableName: string;
-  columnFullName: string;
-  columnName: string;
-  columnSourceName: string;
-  dataType: string;
-};
-
-function normalizeColumnName(name: string) {
-  return name.toLowerCase().replace(/[^a-z0-9]/g, "");
+function findColumn(table: TableMetadata, fullName: string) {
+  return table.columns.find((column) => column.fullName === fullName) ?? null;
 }
 
-function getColumnKey(leftColumnFullName: string, rightColumnFullName: string) {
-  return [leftColumnFullName, rightColumnFullName].sort().join("::");
-}
-
-function getJoinSuggestions(
-  columns: ColumnForSuggestion[],
-  existingColumnJoinKeys: Set<string>,
+function graphJoin(
+  metadata: JoinMetadata,
+  tables: Map<string, TableMetadata>,
 ) {
-  const suggestions = new Map<
-    string,
-    {
-      id: string;
-      leftTableFullName: string;
-      leftTableName: string;
-      rightTableFullName: string;
-      rightTableName: string;
-      leftColumnFullName: string;
-      leftColumnName: string;
-      rightColumnFullName: string;
-      rightColumnName: string;
-      relationshipType: string;
-      condition: string;
-      reason: string;
-      score: number;
-    }
-  >();
+  const left = tables.get(metadata.leftTableFullName);
+  const right = tables.get(metadata.rightTableFullName);
+  const exposeColumns = metadata.source === "manual" && metadata.leftColumns.length === 1;
+  const leftColumn = exposeColumns
+    ? left?.columns.find((column) => column.sourceName === metadata.leftColumns[0])
+    : null;
+  const rightColumn = exposeColumns
+    ? right?.columns.find((column) => column.sourceName === metadata.rightColumns[0])
+    : null;
+  return {
+    id: metadata.id,
+    leftTableFullName: metadata.leftTableFullName,
+    leftTableName: left?.sourceName ?? metadata.leftTableFullName,
+    rightTableFullName: metadata.rightTableFullName,
+    rightTableName: right?.sourceName ?? metadata.rightTableFullName,
+    leftColumnFullName: leftColumn?.fullName ?? "",
+    leftColumnName: leftColumn?.sourceName ?? "",
+    rightColumnFullName: rightColumn?.fullName ?? "",
+    rightColumnName: rightColumn?.sourceName ?? "",
+    relationshipType: metadata.relationshipType,
+    condition: metadata.condition,
+    columnCount: metadata.leftColumns.length,
+  };
+}
 
+function normalizeName(value: string) {
+  return value.toLowerCase().replace(/[^a-z0-9]/g, "");
+}
+
+function buildSuggestions(
+  tables: TableMetadata[],
+  joins: JoinMetadata[],
+) {
+  const columns = tables.flatMap((table) =>
+    table.columns.map((column) => ({ table, column })),
+  );
+  const existing = new Set<string>();
+  for (const join of joins) {
+    if (join.leftColumns.length !== 1 || join.rightColumns.length !== 1) continue;
+    const left = tables.find((table) => table.fullName === join.leftTableFullName);
+    const right = tables.find((table) => table.fullName === join.rightTableFullName);
+    const leftColumn = left?.columns.find((column) => column.sourceName === join.leftColumns[0]);
+    const rightColumn = right?.columns.find((column) => column.sourceName === join.rightColumns[0]);
+    if (leftColumn && rightColumn) existing.add(columnKey(leftColumn.fullName, rightColumn.fullName));
+  }
+  const suggestions = [];
   for (let leftIndex = 0; leftIndex < columns.length; leftIndex += 1) {
-    const left = columns[leftIndex];
-    if (!left) continue;
-
-    for (
-      let rightIndex = leftIndex + 1;
-      rightIndex < columns.length;
-      rightIndex += 1
-    ) {
-      const right = columns[rightIndex];
-      if (!right || left.tableFullName === right.tableFullName) continue;
-
-      const key = getColumnKey(left.columnFullName, right.columnFullName);
-      if (existingColumnJoinKeys.has(key)) continue;
-
-      const leftName = normalizeColumnName(left.columnSourceName);
-      const rightName = normalizeColumnName(right.columnSourceName);
-      const leftIsId = leftName.endsWith("id");
-      const rightIsId = rightName.endsWith("id");
+    const left = columns[leftIndex]!;
+    for (let rightIndex = leftIndex + 1; rightIndex < columns.length; rightIndex += 1) {
+      const right = columns[rightIndex]!;
+      if (left.table.fullName === right.table.fullName) continue;
+      if (existing.has(columnKey(left.column.fullName, right.column.fullName))) continue;
+      const leftName = normalizeName(left.column.sourceName);
+      const rightName = normalizeName(right.column.sourceName);
       const sameName = leftName.length > 1 && leftName === rightName;
-      const sameDataType =
-        left.dataType &&
-        right.dataType &&
-        left.dataType.toLowerCase() === right.dataType.toLowerCase();
-
-      let score = 0;
-      let reason = "";
-
-      if (sameName) {
-        score = leftIsId || rightIsId ? 95 : 80;
-        reason = `matching column name ${left.columnSourceName}`;
-      } else if (leftIsId && rightIsId && leftName.slice(-6) === rightName.slice(-6)) {
-        score = 65;
-        reason = "similar identifier column names";
-      }
-
-      if (score === 0) continue;
-      if (sameDataType) score += 5;
-
-      suggestions.set(key, {
-        id: `${left.columnFullName}->${right.columnFullName}:SUGGESTED_JOIN`,
-        leftTableFullName: left.tableFullName,
-        leftTableName: left.tableName,
-        rightTableFullName: right.tableFullName,
-        rightTableName: right.tableName,
-        leftColumnFullName: left.columnFullName,
-        leftColumnName: left.columnSourceName,
-        rightColumnFullName: right.columnFullName,
-        rightColumnName: right.columnSourceName,
+      if (!sameName) continue;
+      const sameType = left.column.dataType.toLowerCase() === right.column.dataType.toLowerCase();
+      const score = (leftName.endsWith("id") ? 95 : 80) + (sameType ? 5 : 0);
+      suggestions.push({
+        id: `${left.column.fullName}->${right.column.fullName}:SUGGESTED_JOIN`,
+        leftTableFullName: left.table.fullName,
+        leftTableName: left.table.sourceName,
+        rightTableFullName: right.table.fullName,
+        rightTableName: right.table.sourceName,
+        leftColumnFullName: left.column.fullName,
+        leftColumnName: left.column.sourceName,
+        rightColumnFullName: right.column.fullName,
+        rightColumnName: right.column.sourceName,
         relationshipType: "many-to-one",
-        condition: `${left.columnFullName} = ${right.columnFullName}`,
-        reason,
+        condition: `${left.column.fullName} = ${right.column.fullName}`,
+        reason: `matching column name ${left.column.sourceName}`,
         score,
       });
     }
   }
+  return suggestions.sort((left, right) => right.score - left.score).slice(0, 20);
+}
 
-  return Array.from(suggestions.values())
-    .sort((left, right) => right.score - left.score)
-    .slice(0, 20);
+async function context(session: Session) {
+  const tableEntries = await listCatalogTables(session);
+  const joinEntries = await listCatalogJoins(session);
+  const tables = new Map(tableEntries.map(({ metadata }) => [metadata.fullName, metadata]));
+  return { tableEntries, joinEntries, tables };
 }
 
 export async function GET() {
@@ -146,105 +129,19 @@ export async function GET() {
   } catch (error) {
     return Response.json({ error: getErrorMessage(error) }, { status: 401 });
   }
-
-  const driver = getNeo4jDriver();
-  if (!driver) {
-    return Response.json(
-      { error: "Neo4j credentials not configured." },
-      { status: 500 },
-    );
-  }
-
+  const graphDriver = getNeo4jDriver();
+  if (!graphDriver) return Response.json({ error: "Neo4j credentials not configured." }, { status: 500 });
   let session: Session | null = null;
-
   try {
-    session = driver.session();
-    const result = await session.run(`
-      MATCH (leftTable:Table)-[join:JOINS_ON]->(rightTable:Table)
-      RETURN
-        leftTable.fullName AS leftTableFullName,
-        coalesce(leftTable.sourceName, leftTable.name, leftTable.fullName) AS leftTableName,
-        rightTable.fullName AS rightTableFullName,
-        coalesce(rightTable.sourceName, rightTable.name, rightTable.fullName) AS rightTableName,
-        "" AS leftColumnFullName,
-        "" AS leftColumnName,
-        "" AS rightColumnFullName,
-        "" AS rightColumnName,
-        coalesce(join.relationshipType, "") AS relationshipType,
-        coalesce(join.condition, "") AS condition,
-        coalesce(join.columnCount, size(coalesce(join.sourceColumns, []))) AS columnCount
-      UNION
-      MATCH (leftTable:Table)-[:HAS_COLUMN]->(leftColumn:Column)-[join:JOINS_ON]->(rightColumn:Column)<-[:HAS_COLUMN]-(rightTable:Table)
-      RETURN
-        leftTable.fullName AS leftTableFullName,
-        coalesce(leftTable.sourceName, leftTable.name, leftTable.fullName) AS leftTableName,
-        rightTable.fullName AS rightTableFullName,
-        coalesce(rightTable.sourceName, rightTable.name, rightTable.fullName) AS rightTableName,
-        leftColumn.fullName AS leftColumnFullName,
-        coalesce(leftColumn.sourceName, leftColumn.name, leftColumn.fullName) AS leftColumnName,
-        rightColumn.fullName AS rightColumnFullName,
-        coalesce(rightColumn.sourceName, rightColumn.name, rightColumn.fullName) AS rightColumnName,
-        coalesce(join.relationshipType, "") AS relationshipType,
-        coalesce(join.condition, leftColumn.fullName + " = " + rightColumn.fullName) AS condition,
-        1 AS columnCount
-      ORDER BY leftTableName, rightTableName, leftColumnName, rightColumnName
-    `);
-
-    const joins: GraphJoin[] = result.records.map((record) => {
-        const leftTableFullName = record.get("leftTableFullName") as string;
-        const rightTableFullName = record.get("rightTableFullName") as string;
-        const leftColumnFullName = record.get("leftColumnFullName") as string;
-        const rightColumnFullName = record.get("rightColumnFullName") as string;
-        const columnCount = readNeo4jInteger(record.get("columnCount"));
-
-        return {
-          id:
-            leftColumnFullName && rightColumnFullName
-              ? `${leftColumnFullName}->${rightColumnFullName}:JOINS_ON`
-              : `${leftTableFullName}->${rightTableFullName}:JOINS_ON`,
-          leftTableFullName,
-          leftTableName: record.get("leftTableName") as string,
-          rightTableFullName,
-          rightTableName: record.get("rightTableName") as string,
-          leftColumnFullName,
-          leftColumnName: record.get("leftColumnName") as string,
-          rightColumnFullName,
-          rightColumnName: record.get("rightColumnName") as string,
-          relationshipType: record.get("relationshipType") as string,
-          condition: record.get("condition") as string,
-          columnCount,
-        };
-      });
-    const existingColumnJoinKeys = new Set(
-      joins
-        .filter((join) => join.leftColumnFullName && join.rightColumnFullName)
-        .map((join) =>
-          getColumnKey(join.leftColumnFullName, join.rightColumnFullName),
-        ),
+    session = getNeo4jSession(graphDriver);
+    const { tableEntries, joinEntries, tables } = await context(session);
+    const joins = joinEntries
+      .map(({ metadata }) => graphJoin(metadata, tables))
+      .sort((left, right) => left.leftTableName.localeCompare(right.leftTableName));
+    const suggestions = buildSuggestions(
+      tableEntries.map(({ metadata }) => metadata),
+      joinEntries.map(({ metadata }) => metadata),
     );
-    const columnsResult = await session.run(`
-      MATCH (table:Table)-[:HAS_COLUMN]->(column:Column)
-      RETURN
-        table.fullName AS tableFullName,
-        coalesce(table.sourceName, table.name, table.fullName) AS tableName,
-        column.fullName AS columnFullName,
-        coalesce(column.name, column.fullName) AS columnName,
-        coalesce(column.sourceName, column.name, column.fullName) AS columnSourceName,
-        coalesce(column.dataType, "") AS dataType
-      ORDER BY tableName, column.ordinalPosition, columnSourceName
-    `);
-    const suggestions = getJoinSuggestions(
-      columnsResult.records.map((record) => ({
-        tableFullName: record.get("tableFullName") as string,
-        tableName: record.get("tableName") as string,
-        columnFullName: record.get("columnFullName") as string,
-        columnName: record.get("columnName") as string,
-        columnSourceName: record.get("columnSourceName") as string,
-        dataType: record.get("dataType") as string,
-      })),
-      existingColumnJoinKeys,
-    );
-
     return Response.json({ joins, suggestions });
   } catch (error) {
     return Response.json({ error: getErrorMessage(error) }, { status: 500 });
@@ -253,112 +150,128 @@ export async function GET() {
   }
 }
 
+type JoinPayload = {
+  leftTableFullName?: unknown;
+  rightTableFullName?: unknown;
+  leftColumnFullName?: unknown;
+  rightColumnFullName?: unknown;
+  relationshipType?: unknown;
+};
+
+function readPayload(body: JoinPayload) {
+  return {
+    leftTableFullName: required(body.leftTableFullName),
+    rightTableFullName: required(body.rightTableFullName),
+    leftColumnFullName: required(body.leftColumnFullName),
+    rightColumnFullName: required(body.rightColumnFullName),
+    relationshipType: required(body.relationshipType),
+  };
+}
+
+function validatePayload(payload: ReturnType<typeof readPayload>) {
+  if (Object.values(payload).some((value) => !value)) return "Missing table, column, or relationship type.";
+  if (payload.leftColumnFullName === payload.rightColumnFullName) return "Choose two different columns for the join.";
+  return null;
+}
+
+function makeJoinMetadata(
+  payload: ReturnType<typeof readPayload>,
+  leftColumn: CatalogColumn,
+  rightColumn: CatalogColumn,
+): JoinMetadata {
+  const identity = {
+    leftTableFullName: payload.leftTableFullName,
+    rightTableFullName: payload.rightTableFullName,
+    leftColumnFullName: payload.leftColumnFullName,
+    rightColumnFullName: payload.rightColumnFullName,
+  };
+  return {
+    kind: "join",
+    id: stableHash(identity, 24),
+    leftTableFullName: payload.leftTableFullName,
+    rightTableFullName: payload.rightTableFullName,
+    leftColumns: [leftColumn.sourceName],
+    rightColumns: [rightColumn.sourceName],
+    relationshipType: payload.relationshipType,
+    condition: `${leftColumn.fullName} = ${rightColumn.fullName}`,
+    source: "manual",
+  };
+}
+
+async function addJoin(session: Session, payload: ReturnType<typeof readPayload>) {
+  const { tableEntries, joinEntries } = await context(session);
+  const left = tableEntries.find(({ metadata }) => metadata.fullName === payload.leftTableFullName);
+  const right = tableEntries.find(({ metadata }) => metadata.fullName === payload.rightTableFullName);
+  const leftColumn = left && findColumn(left.metadata, payload.leftColumnFullName);
+  const rightColumn = right && findColumn(right.metadata, payload.rightColumnFullName);
+  if (!left || !right || !leftColumn || !rightColumn) throw new Error("Selected table or column was not found.");
+  const metadata = makeJoinMetadata(payload, leftColumn, rightColumn);
+  if (joinEntries.some(({ metadata: item }) => item.id === metadata.id)) throw new Error("This join already exists.");
+  await replaceBundleConcepts(session, left.concept.bundle, (concepts) =>
+    rebuildTableBodies([...concepts, joinInput(metadata)]),
+  );
+  return metadata;
+}
+
 export async function POST(req: Request) {
   try {
     await requireGraphUser();
   } catch (error) {
     return Response.json({ error: getErrorMessage(error) }, { status: 401 });
   }
-
-  const body = (await req.json().catch(() => ({}))) as {
-    leftTableFullName?: unknown;
-    rightTableFullName?: unknown;
-    leftColumnFullName?: unknown;
-    rightColumnFullName?: unknown;
-    relationshipType?: unknown;
-  };
-
-  const leftTableFullName = readRequiredString(body.leftTableFullName);
-  const rightTableFullName = readRequiredString(body.rightTableFullName);
-  const leftColumnFullName = readRequiredString(body.leftColumnFullName);
-  const rightColumnFullName = readRequiredString(body.rightColumnFullName);
-  const relationshipType = readRequiredString(body.relationshipType);
-
-  if (
-    !leftTableFullName ||
-    !rightTableFullName ||
-    !leftColumnFullName ||
-    !rightColumnFullName ||
-    !relationshipType
-  ) {
-    return Response.json(
-      { error: "Missing table, column, or relationship type." },
-      { status: 400 },
-    );
-  }
-
-  if (leftColumnFullName === rightColumnFullName) {
-    return Response.json(
-      { error: "Choose two different columns for the join." },
-      { status: 400 },
-    );
-  }
-
-  const driver = getNeo4jDriver();
-  if (!driver) {
-    return Response.json(
-      { error: "Neo4j credentials not configured." },
-      { status: 500 },
-    );
-  }
-
+  const payload = readPayload((await req.json().catch(() => ({}))) as JoinPayload);
+  const validation = validatePayload(payload);
+  if (validation) return Response.json({ error: validation }, { status: 400 });
+  const graphDriver = getNeo4jDriver();
+  if (!graphDriver) return Response.json({ error: "Neo4j credentials not configured." }, { status: 500 });
   let session: Session | null = null;
-
   try {
-    session = driver.session();
-    const result = await session.run(
-      `
-        MATCH (leftTable:Table { fullName: $leftTableFullName })
-          -[:HAS_COLUMN]->(leftColumn:Column { fullName: $leftColumnFullName })
-        MATCH (rightTable:Table { fullName: $rightTableFullName })
-          -[:HAS_COLUMN]->(rightColumn:Column { fullName: $rightColumnFullName })
-        MERGE (leftColumn)-[join:JOINS_ON]->(rightColumn)
-        ON CREATE SET join.createdAt = datetime()
-        SET
-          join.leftTable = leftTable.fullName,
-          join.rightTable = rightTable.fullName,
-          join.leftColumn = leftColumn.fullName,
-          join.rightColumn = rightColumn.fullName,
-          join.condition = leftColumn.fullName + " = " + rightColumn.fullName,
-          join.relationshipType = $relationshipType,
-          join.updatedAt = datetime()
-        RETURN
-          leftColumn.fullName AS leftColumnFullName,
-          rightColumn.fullName AS rightColumnFullName,
-          join.relationshipType AS relationshipType,
-          join.condition AS condition
-      `,
-      {
-        leftTableFullName,
-        rightTableFullName,
-        leftColumnFullName,
-        rightColumnFullName,
-        relationshipType,
-      },
-    );
-
-    const record = result.records[0];
-    if (!record) {
-      return Response.json(
-        { error: "Selected table or column was not found." },
-        { status: 404 },
-      );
-    }
-
+    session = getNeo4jSession(graphDriver);
+    const metadata = await addJoin(session, payload);
     return Response.json({
       success: true,
       join: {
-        leftColumnFullName: record.get("leftColumnFullName") as string,
-        rightColumnFullName: record.get("rightColumnFullName") as string,
-        relationshipType: record.get("relationshipType") as string,
-        condition: record.get("condition") as string,
+        leftColumnFullName: payload.leftColumnFullName,
+        rightColumnFullName: payload.rightColumnFullName,
+        relationshipType: metadata.relationshipType,
+        condition: metadata.condition,
       },
     });
   } catch (error) {
-    return Response.json({ error: getErrorMessage(error) }, { status: 500 });
+    const message = getErrorMessage(error);
+    return Response.json({ error: message }, { status: message.includes("not found") ? 404 : 500 });
   } finally {
     await session?.close();
   }
+}
+
+async function deleteMatchingJoin(
+  session: Session,
+  keys: {
+    leftTableFullName: string;
+    rightTableFullName: string;
+    leftColumnFullName: string;
+    rightColumnFullName: string;
+  },
+) {
+  const { joinEntries, tables } = await context(session);
+  const match = joinEntries.find(({ metadata }) => {
+    if (
+      metadata.leftTableFullName !== keys.leftTableFullName ||
+      metadata.rightTableFullName !== keys.rightTableFullName
+    ) return false;
+    if (!keys.leftColumnFullName && !keys.rightColumnFullName) return true;
+    const left = tables.get(metadata.leftTableFullName);
+    const right = tables.get(metadata.rightTableFullName);
+    const leftFull = left?.columns.find((column) => column.sourceName === metadata.leftColumns[0])?.fullName;
+    const rightFull = right?.columns.find((column) => column.sourceName === metadata.rightColumns[0])?.fullName;
+    return leftFull === keys.leftColumnFullName && rightFull === keys.rightColumnFullName;
+  });
+  if (!match) return 0;
+  await replaceBundleConcepts(session, match.concept.bundle, (concepts) =>
+    rebuildTableBodies(concepts.filter((concept) => concept.path !== match.concept.path)),
+  );
+  return 1;
 }
 
 export async function PATCH(req: Request) {
@@ -367,129 +280,32 @@ export async function PATCH(req: Request) {
   } catch (error) {
     return Response.json({ error: getErrorMessage(error) }, { status: 401 });
   }
-
-  const body = (await req.json().catch(() => ({}))) as {
-    originalLeftTableFullName?: unknown;
-    originalRightTableFullName?: unknown;
-    originalLeftColumnFullName?: unknown;
-    originalRightColumnFullName?: unknown;
-    leftTableFullName?: unknown;
-    rightTableFullName?: unknown;
-    leftColumnFullName?: unknown;
-    rightColumnFullName?: unknown;
-    relationshipType?: unknown;
+  const raw = (await req.json().catch(() => ({}))) as JoinPayload & Record<string, unknown>;
+  const payload = readPayload(raw);
+  const validation = validatePayload(payload);
+  if (validation) return Response.json({ error: validation }, { status: 400 });
+  const original = {
+    leftTableFullName: required(raw.originalLeftTableFullName),
+    rightTableFullName: required(raw.originalRightTableFullName),
+    leftColumnFullName: required(raw.originalLeftColumnFullName),
+    rightColumnFullName: required(raw.originalRightColumnFullName),
   };
-
-  const originalLeftTableFullName = readRequiredString(
-    body.originalLeftTableFullName,
-  );
-  const originalRightTableFullName = readRequiredString(
-    body.originalRightTableFullName,
-  );
-  const originalLeftColumnFullName = readRequiredString(
-    body.originalLeftColumnFullName,
-  );
-  const originalRightColumnFullName = readRequiredString(
-    body.originalRightColumnFullName,
-  );
-  const leftTableFullName = readRequiredString(body.leftTableFullName);
-  const rightTableFullName = readRequiredString(body.rightTableFullName);
-  const leftColumnFullName = readRequiredString(body.leftColumnFullName);
-  const rightColumnFullName = readRequiredString(body.rightColumnFullName);
-  const relationshipType = readRequiredString(body.relationshipType);
-
-  if (
-    !originalLeftTableFullName ||
-    !originalRightTableFullName ||
-    !originalLeftColumnFullName ||
-    !originalRightColumnFullName ||
-    !leftTableFullName ||
-    !rightTableFullName ||
-    !leftColumnFullName ||
-    !rightColumnFullName ||
-    !relationshipType
-  ) {
-    return Response.json(
-      { error: "Missing table, column, or relationship type." },
-      { status: 400 },
-    );
-  }
-
-  if (leftColumnFullName === rightColumnFullName) {
-    return Response.json(
-      { error: "Choose two different columns for the join." },
-      { status: 400 },
-    );
-  }
-
-  const driver = getNeo4jDriver();
-  if (!driver) {
-    return Response.json(
-      { error: "Neo4j credentials not configured." },
-      { status: 500 },
-    );
-  }
-
+  if (Object.values(original).some((value) => !value)) return Response.json({ error: "Missing original join identity." }, { status: 400 });
+  const graphDriver = getNeo4jDriver();
+  if (!graphDriver) return Response.json({ error: "Neo4j credentials not configured." }, { status: 500 });
   let session: Session | null = null;
-
   try {
-    session = driver.session();
-    const result = await session.run(
-      `
-        MATCH (:Table { fullName: $originalLeftTableFullName })
-          -[:HAS_COLUMN]->(:Column { fullName: $originalLeftColumnFullName })
-          -[oldJoin:JOINS_ON]->
-          (:Column { fullName: $originalRightColumnFullName })
-          <-[:HAS_COLUMN]-(:Table { fullName: $originalRightTableFullName })
-        WITH oldJoin
-        DELETE oldJoin
-        WITH count(*) AS deletedCount
-        MATCH (leftTable:Table { fullName: $leftTableFullName })
-          -[:HAS_COLUMN]->(leftColumn:Column { fullName: $leftColumnFullName })
-        MATCH (rightTable:Table { fullName: $rightTableFullName })
-          -[:HAS_COLUMN]->(rightColumn:Column { fullName: $rightColumnFullName })
-        MERGE (leftColumn)-[join:JOINS_ON]->(rightColumn)
-        ON CREATE SET join.createdAt = datetime()
-        SET
-          join.leftTable = leftTable.fullName,
-          join.rightTable = rightTable.fullName,
-          join.leftColumn = leftColumn.fullName,
-          join.rightColumn = rightColumn.fullName,
-          join.condition = leftColumn.fullName + " = " + rightColumn.fullName,
-          join.relationshipType = $relationshipType,
-          join.updatedAt = datetime()
-        RETURN
-          deletedCount,
-          leftColumn.fullName AS leftColumnFullName,
-          rightColumn.fullName AS rightColumnFullName,
-          join.relationshipType AS relationshipType,
-          join.condition AS condition
-      `,
-      {
-        originalLeftTableFullName,
-        originalRightTableFullName,
-        originalLeftColumnFullName,
-        originalRightColumnFullName,
-        leftTableFullName,
-        rightTableFullName,
-        leftColumnFullName,
-        rightColumnFullName,
-        relationshipType,
-      },
-    );
-
-    const record = result.records[0];
-    if (!record || readNeo4jInteger(record.get("deletedCount")) === 0) {
-      return Response.json({ error: "Join not found." }, { status: 404 });
-    }
-
+    session = getNeo4jSession(graphDriver);
+    const deleted = await deleteMatchingJoin(session, original);
+    if (!deleted) return Response.json({ error: "Original join was not found." }, { status: 404 });
+    const metadata = await addJoin(session, payload);
     return Response.json({
       success: true,
       join: {
-        leftColumnFullName: record.get("leftColumnFullName") as string,
-        rightColumnFullName: record.get("rightColumnFullName") as string,
-        relationshipType: record.get("relationshipType") as string,
-        condition: record.get("condition") as string,
+        leftColumnFullName: payload.leftColumnFullName,
+        rightColumnFullName: payload.rightColumnFullName,
+        relationshipType: metadata.relationshipType,
+        condition: metadata.condition,
       },
     });
   } catch (error) {
@@ -505,81 +321,20 @@ export async function DELETE(req: Request) {
   } catch (error) {
     return Response.json({ error: getErrorMessage(error) }, { status: 401 });
   }
-
-  const body = (await req.json().catch(() => ({}))) as {
-    leftTableFullName?: unknown;
-    rightTableFullName?: unknown;
-    leftColumnFullName?: unknown;
-    rightColumnFullName?: unknown;
+  const raw = (await req.json().catch(() => ({}))) as Record<string, unknown>;
+  const keys = {
+    leftTableFullName: required(raw.leftTableFullName),
+    rightTableFullName: required(raw.rightTableFullName),
+    leftColumnFullName: required(raw.leftColumnFullName),
+    rightColumnFullName: required(raw.rightColumnFullName),
   };
-
-  const leftTableFullName = readRequiredString(body.leftTableFullName);
-  const rightTableFullName = readRequiredString(body.rightTableFullName);
-  const leftColumnFullName = readRequiredString(body.leftColumnFullName);
-  const rightColumnFullName = readRequiredString(body.rightColumnFullName);
-
-  if (!leftTableFullName || !rightTableFullName) {
-    return Response.json(
-      { error: "Missing join table identifiers." },
-      { status: 400 },
-    );
-  }
-
-  const driver = getNeo4jDriver();
-  if (!driver) {
-    return Response.json(
-      { error: "Neo4j credentials not configured." },
-      { status: 500 },
-    );
-  }
-
+  if (!keys.leftTableFullName || !keys.rightTableFullName) return Response.json({ error: "Missing join identity." }, { status: 400 });
+  const graphDriver = getNeo4jDriver();
+  if (!graphDriver) return Response.json({ error: "Neo4j credentials not configured." }, { status: 500 });
   let session: Session | null = null;
-
   try {
-    session = driver.session();
-    const result =
-      leftColumnFullName && rightColumnFullName
-        ? await session.run(
-            `
-              MATCH (:Table { fullName: $leftTableFullName })
-                -[:HAS_COLUMN]->(:Column { fullName: $leftColumnFullName })
-                -[join:JOINS_ON]->
-                (:Column { fullName: $rightColumnFullName })
-                <-[:HAS_COLUMN]-(:Table { fullName: $rightTableFullName })
-              WITH join
-              DELETE join
-              RETURN count(*) AS deletedCount
-            `,
-            {
-              leftTableFullName,
-              rightTableFullName,
-              leftColumnFullName,
-              rightColumnFullName,
-            },
-          )
-        : await session.run(
-            `
-              MATCH (:Table { fullName: $leftTableFullName })
-                -[join:JOINS_ON]->
-                (:Table { fullName: $rightTableFullName })
-              WITH join
-              DELETE join
-              RETURN count(*) AS deletedCount
-            `,
-            {
-              leftTableFullName,
-              rightTableFullName,
-            },
-          );
-
-    const deletedCount = readNeo4jInteger(
-      result.records[0]?.get("deletedCount"),
-    );
-
-    if (deletedCount === 0) {
-      return Response.json({ error: "Join not found." }, { status: 404 });
-    }
-
+    session = getNeo4jSession(graphDriver);
+    const deletedCount = await deleteMatchingJoin(session, keys);
     return Response.json({ success: true, deletedCount });
   } catch (error) {
     return Response.json({ error: getErrorMessage(error) }, { status: 500 });

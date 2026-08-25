@@ -126,7 +126,7 @@ export async function listSnowflakeJoins(
       }
 
       const joinKey = `${sourceKey}->${targetKey}`;
-      const join = joins.get(joinKey) ?? {
+      const join: WarehouseJoin = joins.get(joinKey) ?? {
         source,
         target,
         columns: [],
