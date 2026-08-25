@@ -168,7 +168,15 @@ export function DatasetDialog({
     setError("");
     setTables([]);
     fetchTables(selectedDialect, selectedDatabase)
-      .then(setTables)
+      .then((nextTables) => {
+        setTables(nextTables);
+        const sourceByKey = new Map(
+          nextTables.map((table) => [getTableKey(table), table]),
+        );
+        setSelectedTables((current) =>
+          current.map((table) => sourceByKey.get(getTableKey(table)) ?? table),
+        );
+      })
       .catch((err: unknown) => {
         setError(getErrorMessage(err, "Could not load tables."));
       })
@@ -231,10 +239,15 @@ export function DatasetDialog({
     setProgressLabel("Saving dataset tables and columns...");
 
     try {
+      const sourceByKey = new Map(
+        tables.map((table) => [getTableKey(table), table]),
+      );
       const data = await syncGraphDatabase(
         selectedDatabase,
         selectedDialect,
-        selectedTables,
+        selectedTables.map(
+          (table) => sourceByKey.get(getTableKey(table)) ?? table,
+        ),
       );
       setProgress(96);
       setProgressLabel("Refreshing the saved dataset...");
@@ -300,14 +313,14 @@ export function DatasetDialog({
         ) : result ? (
           <div className="space-y-4">
             <SuccessMessage>
-              Dataset loaded successfully. Created {result.tablesCreated} tables
-              and {result.columnsCreated} columns
+              Dataset loaded successfully. Created {result.tablesCreated} table
+              concepts with {result.columnsCreated} embedded column definitions
               {typeof result.joinsCreated === "number"
                 ? ` with ${result.joinsCreated} joins.`
                 : "."}
             </SuccessMessage>
             <p className="text-sm text-muted-foreground">
-              The Dataset, Schema, Table, and Column nodes are ready in Context.
+              The OKF bundle, concepts, sections, and links are ready in Neo4j.
             </p>
           </div>
         ) : (

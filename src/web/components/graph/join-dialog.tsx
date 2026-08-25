@@ -78,8 +78,8 @@ export function JoinDialog({
         <DialogHeader>
           <DialogTitle>{editing ? "Edit join" : "Add join"}</DialogTitle>
           <DialogDescription>
-            Choose two tables, then connect their join columns with a JOINS_ON
-            edge.
+            Choose two tables and their join columns. The result is stored as an
+            OKF Reference concept, not as column nodes.
           </DialogDescription>
         </DialogHeader>
 

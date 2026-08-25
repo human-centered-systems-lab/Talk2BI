@@ -3,9 +3,10 @@ import { generateText, Output } from "ai";
 import type { Session } from "neo4j-driver";
 import { z } from "zod";
 
-import { resolveModel } from "@/lib/ai/model";
+import { resolveModel } from "@/lib/ai/models";
 import { requireGraphUser } from "@/lib/graph/auth";
-import { getNeo4jDriver } from "@/lib/tools/tool_read_knowledge_store";
+import { listCatalogTables } from "@/lib/okf/catalog";
+import { getNeo4jDriver, getNeo4jSession } from "@/lib/okf/store";
 
 const APP_KEY = process.env.TALK2BI_APP_ID ?? "talk2bi";
 const MAX_SCHEMA_CONTEXT_CHARS = 100_000;
@@ -88,40 +89,19 @@ async function readSuggestions(session: Session): Promise<SuggestionRecord[]> {
 }
 
 async function readSchemaContext(session: Session) {
-  const result = await session.run(`
-    MATCH (dataset:Dataset)-[:HAS_SCHEMA]->(schema:Schema)-[:HAS_TABLE]->(table:Table)
-    OPTIONAL MATCH (table)-[:HAS_COLUMN]->(column:Column)
-    WITH dataset, schema, table, column
-    ORDER BY dataset.name, schema.name, table.name, column.ordinalPosition, column.name
-    WITH dataset, schema, table, collect({
-      name: coalesce(column.sourceName, column.name),
-      type: coalesce(column.dataType, ""),
-      description: coalesce(column.description, "")
-    }) AS columns
-    RETURN
-      dataset.name AS dataset,
-      coalesce(dataset.dialect, "Snowflake") AS dialect,
-      schema.name AS schema,
-      coalesce(table.sourceName, table.name, table.fullName) AS table,
-      coalesce(table.description, "") AS description,
-      columns
-    ORDER BY dataset, schema, table
-  `);
-
-  const lines = result.records.map((record) => {
-    const columns = (record.get("columns") as Array<Record<string, string>>)
-      .filter((column) => column.name)
+  const tables = await listCatalogTables(session);
+  const lines = tables.map(({ concept, metadata }) => {
+    const columns = metadata.columns
       .map((column) =>
-        `${column.name}${column.type ? ` (${column.type})` : ""}${
+        `${column.sourceName}${column.dataType ? ` (${column.dataType})` : ""}${
           column.description ? ` — ${column.description}` : ""
         }`,
       )
       .join(", ");
-    const description = record.get("description") as string;
 
     return [
-      `${record.get("dataset")} [${record.get("dialect")}] > ${record.get("schema")} > ${record.get("table")}`,
-      description ? `Table description: ${description}` : "",
+      `${metadata.database} [${metadata.dialect}] > ${metadata.schema} > ${metadata.sourceName}`,
+      concept.description ? `Table description: ${concept.description}` : "",
       columns ? `Columns: ${columns}` : "Columns: none",
     ]
       .filter(Boolean)
@@ -144,7 +124,7 @@ export async function GET() {
 
   try {
     const driver = await requireDriver();
-    session = driver.session();
+    session = getNeo4jSession(driver);
     return Response.json({ suggestions: await readSuggestions(session) });
   } catch (error) {
     const message = getErrorMessage(error);
@@ -164,7 +144,7 @@ export async function POST(req: Request) {
     const driver = await requireDriver();
     const body = (await req.json().catch(() => ({}))) as { model?: string };
     const model = resolveModel(body.model);
-    session = driver.session();
+    session = getNeo4jSession(driver);
     const schemaContext = await readSchemaContext(session);
 
     const result = await generateText({
@@ -256,7 +236,7 @@ export async function PATCH(req: Request) {
       );
     }
 
-    session = driver.session();
+    session = getNeo4jSession(driver);
     const result = await session.run(
       `
         MATCH (:Application {key: $appKey})-[:HAS_SUGGESTION]->(suggestion:Suggestion {id: $id})
@@ -296,7 +276,7 @@ export async function DELETE(req: Request) {
       return Response.json({ error: "Suggestion id is required." }, { status: 400 });
     }
 
-    session = driver.session();
+    session = getNeo4jSession(driver);
     const result = await session.run(
       `
         MATCH (:Application {key: $appKey})-[:HAS_SUGGESTION]->(suggestion:Suggestion {id: $id})

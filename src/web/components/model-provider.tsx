@@ -1,6 +1,6 @@
 "use client";
 
-import type { ModelOption } from "@/lib/ai/model";
+import type { ModelOption } from "@/lib/ai/models";
 import {
   createContext,
   type ReactNode,

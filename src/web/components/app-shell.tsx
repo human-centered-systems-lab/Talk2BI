@@ -8,7 +8,7 @@ import { PageHeader } from "@/components/assistant-ui/page-header";
 import { AlfredRuntimeProvider } from "@/components/assistant-ui/runtime-provider";
 import { SettingsDialog } from "@/components/assistant-ui/settings-dialog";
 import { EnvVarWarning } from "@/components/env-var-warning";
-import { ReadKnowledgeStoreUI } from "@/components/tools/readknowledgestoreui";
+import { RetrieveOkfContextUI } from "@/components/tools/retrieveokfcontextui";
 import {
   DatabricksSqlQueryUI,
   SnowflakeSqlQueryUI,
@@ -48,7 +48,7 @@ export function AppShell({ children }: { children: ReactNode }) {
   return (
     <AlfredRuntimeProvider>
       <ThinkingToolUI />
-      <ReadKnowledgeStoreUI />
+      <RetrieveOkfContextUI />
       <SnowflakeSqlQueryUI />
       <DatabricksSqlQueryUI />
 

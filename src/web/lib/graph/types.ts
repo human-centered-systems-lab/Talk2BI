@@ -10,6 +10,7 @@ export type WarehouseTable = {
   database: string;
   schema: string;
   name: string;
+  description?: string;
 };
 
 export type WarehouseColumn = WarehouseTable & {

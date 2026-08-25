@@ -171,9 +171,9 @@ export function SuggestionsTab({
         <div>
           <h2 className="text-base font-semibold">Suggestions</h2>
           <p className="mt-1 max-w-2xl text-sm text-muted-foreground">
-            Generate starter questions from the Dataset, Schema, Table, and
-            Column metadata in this app. Suggestions are stored in the graph and
-            shown on a new chat.
+            Generate starter questions from table and column metadata embedded
+            in the app-managed OKF concepts. Suggestions are stored in the graph
+            and shown on a new chat.
           </p>
         </div>
         <div className="flex items-center gap-2">
@@ -240,8 +240,8 @@ export function SuggestionsTab({
       </div>
 
       <div className="rounded-md border bg-muted/20 px-3 py-2 text-xs text-muted-foreground">
-        Generation reads schema metadata directly and does not use References,
-        embeddings, or knowledge retrieval. Regenerating replaces the current
+        Generation reads the structured metadata inside table concepts directly;
+        it does not run the retrieval agent. Regenerating replaces the current
         stored suggestions, including manual edits.
       </div>
 

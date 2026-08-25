@@ -7,11 +7,11 @@ import {
   createEvaluationRun,
   getEvaluationCase,
 } from "@/lib/db";
-import { CURRENT_MODEL } from "@/lib/ai/model";
+import { CURRENT_MODEL } from "@/lib/ai/models";
 import { createClient } from "@/lib/supabase/server";
 import { tool_snowflake_sql_query } from "@/lib/tools/tool_snowflake_sql_query";
 import { tool_databricks_sql_query } from "@/lib/tools/tool_databricks_sql_query";
-import { tool_read_knowledge_store } from "@/lib/tools/tool_read_knowledge_store";
+import { tool_retrieve_okf_context } from "@/lib/tools/tool_retrieve_okf_context";
 import { tool_thinking } from "@/lib/tools/tool_thinking";
 
 const openai = createOpenAI({
@@ -88,8 +88,9 @@ Query the warehouse the retrieved tables belong to: use tool_snowflake_sql_query
 Your final response must include the final answer, a "Result" heading with the final query result as a Markdown table, and exactly one final SQL statement under a "Final SQL" heading.
 The final SQL must be the SQL statement that directly supports the answer.`;
 
+    const model = openai.chat(CURRENT_MODEL);
     const result = await generateText({
-      model: openai.chat(CURRENT_MODEL),
+      model,
       system,
       messages: [
         {
@@ -101,7 +102,10 @@ The final SQL must be the SQL statement that directly supports the answer.`;
       temperature: 0,
       tools: {
         tool_thinking: tool_thinking(),
-        tool_read_knowledge_store: tool_read_knowledge_store(),
+        tool_retrieve_okf_context: tool_retrieve_okf_context({
+          question: evaluationCase.question,
+          model,
+        }),
         tool_snowflake_sql_query: tool_snowflake_sql_query(),
         tool_databricks_sql_query: tool_databricks_sql_query(),
       },
@@ -111,6 +115,15 @@ The final SQL must be the SQL statement that directly supports the answer.`;
           reasoningSummary: "auto",
         },
       },
+      prepareStep: ({ stepNumber }) =>
+        stepNumber === 0
+          ? {
+              toolChoice: {
+                type: "tool",
+                toolName: "tool_retrieve_okf_context",
+              },
+            }
+          : {},
     });
 
     const trace = extractToolTrace(result);

@@ -362,6 +362,23 @@ function SidebarAccountMenu() {
                     MenschKI!
                   </span>
                 </a>
+                <a
+                  href="https://theodi.org/"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="flex min-h-28 flex-col items-center justify-center gap-2 rounded-md px-4 transition-colors hover:bg-neutral-50 dark:hover:bg-neutral-900"
+                  aria-label="Open Data Institute"
+                >
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img
+                    src="https://data.org/wp-content/uploads/2021/10/logo-ODI.png"
+                    alt="Open Data Institute"
+                    className="max-h-14 w-full max-w-36 object-contain"
+                  />
+                  <span className="text-center text-[11px] text-neutral-600 dark:text-neutral-400">
+                    Open Data Institute
+                  </span>
+                </a>
               </div>
             </section>
 
@@ -372,10 +389,10 @@ function SidebarAccountMenu() {
                 warehouse, and answers in the language you asked in.
               </p>
               <p>
-                KIT, EnBW, King&apos;s College London, and MenschKI! collaborate
-                under a shared mission to keep production-grade data access
-                open — research-first, transparent end to end, and owned by the
-                teams who rely on it.
+                KIT, EnBW, King&apos;s College London, MenschKI!, and the Open Data
+                Institute collaborate under a shared mission to keep
+                production-grade data access open — research-first, transparent
+                end to end, and owned by the teams who rely on it.
               </p>
               <p>
                 Founder: Niklas Wagner —{" "}

@@ -1,5 +1,8 @@
 import { NextResponse } from "next/server";
-import { AVAILABLE_MODEL_OPTIONS, CURRENT_MODEL } from "@/lib/ai/model";
+import {
+  AVAILABLE_MODEL_OPTIONS,
+  CURRENT_MODEL,
+} from "@/lib/ai/models";
 
 export async function GET() {
   return NextResponse.json({
